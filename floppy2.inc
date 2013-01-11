@@ -7,10 +7,9 @@
 ;	- see floppy1.inc for other INT 13h functions
 ;-------------------------------------------------------------------------
 ;
-; Compiles with NASM 2.07, might work with other versions
-;
-; Copyright (C) 2011 Sergey Kiselev.
-; Provided for hobbyist use on the Sergey's XT board.
+; Copyright (C) 2011 - 2013 Sergey Kiselev.
+; Provided for hobbyist use on the
+;       ISA Floppy Disk and Serial Controller and XT-FDC cards.
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -74,6 +73,7 @@ int_13_flags_l	equ	int_13_flags
 ;			AH = error code
 ;-------------------------------------------------------------------------
 int_13:
+	call	int_trace
 	sti
 	push	ax
 	push	bx
@@ -137,9 +137,8 @@ int_13_upd_exit:
 	mov	al,byte [bp+int_13_dl]	; get drive number
 	cmp	al,1
 	ja	.no_update		; skip if invalid drive number
-	mov	bx,fdc_media_state
-	add	bl,al			; BX -> drive media state
-	test	byte [bx],fdc_m_established
+	call	get_media_state		; BL = drive media state
+	test	bl,fdc_m_established
 	jz	.no_update		; skip if media type not established
 	mov	ah,04h			; set bit 2 (drive 0 type determined)
 	or	al,al
@@ -170,6 +169,7 @@ int_13_exit:
 	pop	cx
 	pop	bx
 	pop	ax
+	call	int_trace
 	iret
 
 ;=========================================================================
@@ -194,48 +194,67 @@ int_13_exit:
 ;	CF set on error
 ;		AH = error code
 ;-------------------------------------------------------------------------
+; XXXX - validate that AL is actually non-zero
 int_13_fn02:
 int_13_fn03:
 int_13_fn04:
-	cmp	dl,1
-	ja	.invalid_drive
-	mov	si,fdc_media_state
-	push	dx
-	mov	dh,00h
-	add	si,dx			; SI -> drive media state
-	pop	dx
+	call	get_drive_type		; get drive type in AL
+	jc	.invalid_drive		; invalid type or drive doesn't exist
 
-	call	read_cmos_type		; get drive type in AL
-	jc	.invalid_drive
+	push	bx
+	call	get_media_state	
+	mov	cl,bl			; CL = media state
+	pop	bx
 
-	mov	di,fdc_motor_state
-	and	byte [di],~fdc_write_flag ; read / verify operation
+	call	set_motor_state_read	; read / verify operation
 	cmp	ah,03h			; write function
 	jne	.motor_on		; jump if not write function
-	or	byte [di],fdc_write_flag ; write / format operation
+	call	set_motor_state_write	; write / format operation
 
 .motor_on:
 	call	fdc_motor_on
-	cmp	al,cmos_360
+
+	cmp	al,type_360
 	je	.set_media_360		; set media type for 360K drive
-	cmp	al,cmos_720
+	cmp	al,type_720
 	je	.set_media_720		; set media type for 720K drive
 
 	call	fdc_disk_change
 	jc	.error_end_io		; jump if disk change check failed
 
-	test	byte [si],fdc_m_established
+	test	cl,fdc_m_established
 	jz	.establish_media	; jump if media type is not established
 
 	call	fdc_select_rate		; select transfer rate
+	jmp	.fdc_send_specify
+
+; 360K and 720K drives don't support change line, and only support
+; one media type - set it here
+
+.set_media_360:
+	mov	al,fdc_m_360in360	; 250Kbps, media established, 360K/360K
+	jmp	.set_media
+
+.set_media_720:
+	mov	al,fdc_m_720		; 250Kbps, media established, 720K/720K
+
+.set_media:
+	call	set_media_state		; save media state (AL) to the data area
+	call	fdc_set_rate		; send transfer rate (in AL) to FDC
+	mov	dx,word [bp+int_13_dx]	; restore DX (trashed by fdc_set_rate)
+	jmp	.fdc_send_specify
+
+.establish_media:
+	call	fdc_detect_media	; detect media type
+	jc	.error_end_io
 	
 .fdc_send_specify:
 	mov	ax,0BF03h		; FDC Specify command +
 					; 0BFh - specify byte 0 for 1.44M
-	cmp	byte [si],fdc_m_1440	; 1.44M?
+	cmp	cl,fdc_m_1440		; 1.44M?
 	je	.fdc_send_specify_cmd	; jump if 1.44M
 	mov	ah,0DFh			; 0DFh - specify byte 0 for 360/1.2/720
-	cmp	byte [si],fdc_m_2880	; 2.88M?
+	cmp	cl,fdc_m_2880		; 2.88M?
 	jne	.fdc_send_specify_cmd	; jump if not 2.88M
 	mov	ah,0AFh			; 0AFh - specify byte 0 for 2.88M
 
@@ -266,13 +285,13 @@ int_13_fn04:
 	mov	cx,ax			; ...count for DMA
 
 	mov	ah,byte [bp+int_13_ah]	; AH = function
-	mov	al,46h			; DMA mode byte for read
+	mov	al,44h			; DMA mode byte for read
 	cmp	ah,02h			; read function?
 	je	.configure_dma		; jump if read function
-	mov	al,4Ah			; DMA mode byte for write
+	mov	al,48h			; DMA mode byte for write
 	cmp	ah,03h			; write function?
 	je	.configure_dma		; jump if write function
-	mov	al,42h			; DMA mode byte for verification
+	mov	al,40h			; DMA mode byte for verification
 
 .configure_dma:
 	call	fdc_configure_dma
@@ -293,10 +312,10 @@ int_13_fn04:
 	mov	ch,byte [si+6]		; CH = special sector size
 	pop	ds
 
-	mov	si,fdc_media_state
-	mov	dh,00h
-	add	si,dx
-	mov	dl,byte [si]		; drive media state
+	push	bx
+	call	get_media_state
+	mov	dl,bl			; DL = drive media state
+	pop	bx
 	mov	bh,1Bh			; read / write gap for 1.2M/1.44M/2.88M
 	cmp	dl,fdc_m_1440		; 1.44M media?
 	je	.gap_set		; jump if 1.44M media
@@ -312,11 +331,13 @@ int_13_fn04:
 .gap_set:
 	mov	dx,word [bp+int_13_dx]	; restore dx
 	mov	al,byte [bp+int_13_ch]	; cylinder
-	mov	ah,dh			; head
+	mov	ah,dh			; head - XXX remove mov dx above
+					; replace with mov ah,byte[bp+int_13_dh]
 	mov	si,ax			; head / cylinder (bytes 2-3)
 	shl	ah,1
 	shl	ah,1
-	or	ah,dl			; FDC command byte 1
+	call	get_phys_drive		; DL = physical drive number
+	or	ah,dl			; FDC command byte 1 (head & drive)
 	mov	al,0E6h			; FDC Read command
 	cmp	byte [bp+int_13_ah],3	; write function?
 	jne	.send_command		; jump if not write 
@@ -337,9 +358,10 @@ int_13_fn04:
 
 .exit_end_io:
 	mov	ch,byte [bp+int_13_ch]	; CH = cylinder
-;	mov	dh,byte [bp+int_13_dl]	; DH = head
+;	mov	dh,byte [bp+int_13_dh]	; DH = head
 	call	fdc_end_io		; return number of last sector in BL
-	or	al,al
+	or	al,al			; XXXX - why this needed?
+					; AL seems to contain garbage here
 	jz	.zero_sectors		; jump if zero sectors were transferred
 	mov	al,bl			; AL = last transferred sector
 	sub	al,byte [bp+int_13_cl]	; minus the first sector
@@ -370,30 +392,6 @@ int_13_fn04:
 	mov	ax,fdc_e_invalid << 8	; AH = 01h, AL = 00h (0 sectors trans)
 	jmp	.error
 
-; 360K and 720K drives don't support change line, and only support
-; one media type - set it here
-
-.set_media_360:
-	mov	al,fdc_m_360in360	; 250Kbps, media established, 360K/360K
-	jmp	.set_media
-
-.set_media_720:
-	mov	al,fdc_m_720		; 250Kbps, media established, 720K/720K
-
-.set_media:
-	mov	byte [si],al		; save media state
-	call	fdc_set_rate		; send transfer rate (in AL) to FDC
-	mov	dx,word [bp+int_13_dx]	; restore DX (trashed by fdc_set_rate)
-	jmp	.fdc_send_specify
-
-; establish media type
-
-.establish_media:
-	call	fdc_detect_media
-	jc	.error_end_io
-	jmp	.fdc_send_specify
-	
-
 ;=========================================================================
 ; int_13_fn05 - Format track
 ; Input:
@@ -408,19 +406,16 @@ int_13_fn04:
 ;	CF set on error
 ;		AH = error code 
 ;-------------------------------------------------------------------------
+msg_dma	db	'Format/DMA Configuration:', 0Dh, 0Ah, 00
 int_13_fn05:
-	cmp	dl,1
-	ja	.invalid_drive		; jump if invalid drive number
-	call	read_cmos_type		; get drive type in AL
-	jc	.invalid_drive
-	mov	si,fdc_media_state
-	push	dx
-	mov	dh,00h
-	add	si,dx			; SI -> drive media state
-	pop	dx
-	cmp	byte [si],0
+	call	get_drive_type		; get drive type in AL
+	jc	.invalid_drive		; invalid type or drive doesn't exist
+	push	bx
+	call	get_media_state		; BL = drive media state
+	cmp	bl,0
+	pop	bx
 	jz	.timeout		; jump if media type is not established
-	or	byte [fdc_motor_state],fdc_write_flag ; write operation
+	call	set_motor_state_write	; write / format operation
 	call	fdc_motor_on
 	call	fdc_disk_change		; read disk change line
 	jc	.error_end_io		; jump if disk change check failed
@@ -430,7 +425,7 @@ int_13_fn05:
 	xor	si,si
 	mov	ds,si
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
-	mov	cl,[si+4]		; sectors per track
+	mov	cl,byte [si+4]		; sectors per track
 	mov	di,word [si+7]		; format gap, sectors per track
 	mov	si,word [si+3]		; bytes per sector, sectors per track
 	pop	ds
@@ -438,10 +433,16 @@ int_13_fn05:
 	shl	cx,1			; CX = CX * 4 (address field is 4 bytes)
 	shl	cx,1
 	dec	cx	 		; minus one byte...
-	mov	al,4Ah			; DMA mode byte for write
+	mov	al,48h			; DMA mode byte for write
+	push	si
+	mov	si,msg_dma
+	call	print
+	pop	si
+	call	int_trace
 	call	fdc_configure_dma
 	jc	.error_end_io		; DMA boundry crossed
 	mov	ch,byte [bp+int_13_ch]	; cylinder
+	mov	dx,word [bp+int_13_dx]	; restore DX (trashed by fdc_select_rate)
 	push	si
 	call 	fdc_seek		; seek drive DL to cylinder CH, head DH
 	pop	si
@@ -450,7 +451,8 @@ int_13_fn05:
 	mov	ah,dh
 	shl	ah,1
 	shl	ah,1
-	or	ah,dl
+	call	get_phys_drive		; DL = physical drive number
+	or	ah,dl			; FDC command byte 1 (head & drive)
 	mov	al,4Dh			; FDC Format command
 
 	mov	cl,6			; 6 byte command
@@ -496,10 +498,10 @@ int_13_fn05:
 	jmp	.error
 
 ;=========================================================================
-; int_0E - IRQ6 (FDC) service routine
+; int_fdc - IRQ6 (FDC) service routine
 ; Sets bit 7 in drive recalibration status byte (fdc_calib_state)
 ;-------------------------------------------------------------------------
-int_0E:
+int_fdc:
 	push	ax
 	push	ds
 	mov	ax,biosdseg
