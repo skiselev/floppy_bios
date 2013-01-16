@@ -76,7 +76,6 @@ int_13_flags_l	equ	int_13_flags
 ;			AH = error code
 ;-------------------------------------------------------------------------
 int_13:
-;	call	int_trace
 	sti
 	push	ax
 	push	bx
@@ -92,14 +91,14 @@ int_13:
 	mov	bx,biosdseg
 	mov	ds,bx			; DS = BIOS data segment (0040h)
 
-; fn01 and fn08 don't need physical drive information
+; fn01, and fn08 don't need physical drive information
 
 	cmp	ah,01h
 	je	int_13_fn01		; Get status of last operation
 	cmp	ah,08h
 	je	int_13_fn08		; Get drive parameters
 
-; get physical drive information
+; get pointer to the drive configuration and the drive type
 
 	cmp	dl,(NUM_DRIVES-1)
 	ja	.invalid_parameters	; invalid drive number (>= NUM_DRIVES)
@@ -108,6 +107,14 @@ int_13:
 	shl	bx,1			; multiply by 4:
 	shl	bx,1			; 4 bytes per drive_config entry
     cs	mov	al,byte [drive_config+bx] ; AL = drive type
+
+; fn15 reports status '00h' for drive not present
+
+	cmp	ah,15h
+	je	int_13_fn15		; Get disk type
+
+; get physical drive information for all other functions
+
 	cmp	al,type_none
 	je	.invalid_parameters	; drive not present or not configured
     cs	mov	bx,word [drive_config+1+bx] ; BL = FDC number
@@ -131,8 +138,6 @@ int_13:
 	je	int_13_fn04		; Verify disk sectors
 	cmp	ah,05h
 	je	int_13_fn05		; Format track
-	cmp	ah,15h
-	je	int_13_fn15		; Get disk type
 	cmp	ah,16h
 	je	int_13_fn16		; Detect disk change
 	cmp	ah,17h
@@ -189,7 +194,6 @@ int_13_exit:
 	pop	cx
 	pop	bx
 	pop	ax
-;	call	int_trace
 	iret
 
 ;=========================================================================
@@ -345,9 +349,9 @@ int_13_fn04:
 	mov	bh,2Ah			; read / write gap for 360K and 720K drv
 	
 .gap_set:
-	mov	dx,word [bp+int_13_dx]	; restore dx
+	mov	dh,byte [bp+int_13_dh]	; restore DH
 	mov	al,byte [bp+int_13_ch]	; cylinder
-	mov	ah,dh			; head - XXX remove mov dx above
+	mov	ah,dh			; head
 					; replace with mov ah,byte[bp+int_13_dh]
 	mov	si,ax			; head / cylinder (bytes 2-3)
 	shl	ah,1
@@ -433,7 +437,7 @@ int_13_fn05:
 	call	fdc_send_specify	; send FDC Specify command
 
 	mov	ch,byte [bp+int_13_ch]	; cylinder
-	mov	dh,byte [bp+int_13_dh]	; XXXXX - just in case DH got corrupted
+;	mov	dh,byte [bp+int_13_dh]	; XXXXX - just in case DH got corrupted
 	call 	fdc_seek		; seek drive DL to cylinder CH, head DH
 	jc	.error_fdc_get_result	; jump if seek failed
 
