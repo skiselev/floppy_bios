@@ -1748,18 +1748,14 @@ config:
 ; floppy drives configuration - 8 entries of 4 bytes each.
 ; Entry format: <CMOS drive type>, <FDC number>, <physical drive number>, 00
 drive_config:
-.drive0	db	type_2880, 00h, 00h, 00h; 1.44MB, primary controller, drive #0
-.drive1	db	type_1440, 01h, 00h, 00h; 1.44MB, primary controller, drive #0
-.drive2	db	type_1440, 01h, 01h, 00h; 1.44MB, primary controller, drive #0
-.drive3	db	type_none, 01h, 03h, 00h; no drive
-.drive4	db	type_none, 01h, 03h, 00h; no drive
-;.drive1	db	type_1200, 00h, 01h, 00h; 1.2MB, primary controller, drive #1
-;.drive2	db	type_360,  01h, 00h, 00h; 360KB, secondary controller, drive #0
-;.drive3	db	type_720,  01h, 01h, 00h; 720KB, secondary controller, drive #1
-;.drive4	db	type_2880, 01h, 02h, 00h; 2.88MB, secondary controller, drive #2
-.drive5	db	type_none, 01h, 03h, 00h; no drive
-.drive6	db	type_none, 00h, 02h, 00h; no drive
-.drive7	db	type_none, 00h, 03h, 00h; no drive
+.drive0	db	type_1440, 00h, 00h, 00h; 1.44MB,   primary FDC, drive #0
+.drive1	db	type_1200, 00h, 01h, 00h; 1.2MB,    primary FDC, drive #1
+.drive2	db	type_none, 00h, 02h, 00h; no drive, primary FDC, drive #2
+.drive3	db	type_none, 00h, 03h, 00h; no drive, primary FDC, drive #3
+.drive4	db	type_none, 01h, 00h, 00h; no drive, secondary FDC, drive #0
+.drive5	db	type_none, 01h, 01h, 00h; no drive, secondary FDC, drive #1
+.drive6	db	type_none, 01h, 02h, 00h; no drive, secondary FDC, drive #2
+.drive7	db	type_none, 01h, 03h, 00h; no drive, secondary FDC, drive #3
 
 ;-------------------------------------------------------------------------
 ; floppy disk controllers configuration - 2 entries of 4 bytes each.
