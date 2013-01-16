@@ -374,6 +374,9 @@ int_13_fn08:
 ;		02h - floppy with change-line support
 ;-------------------------------------------------------------------------
 int_13_fn15:
+	mov	ah,00h			; assume no drive
+	cmp	al,type_none
+	je	.exit
 	mov	ah,01h			; assume no change-line support
 	cmp	al,type_360
 	je	.exit
@@ -383,8 +386,6 @@ int_13_fn15:
 
 .exit:
 	clc
-
-.error:
 	mov	byte [fdc_last_error],0
 	jmp	int_13_exit
 
@@ -991,12 +992,9 @@ fdc_configure_dma:
 	jc	.dma_boundary		; jump if crossing DMA boundary (64 KiB)
 
 ; adjust registers for FDC's DMA channel
-	mov	bh,0
-	mov	bl,byte [bp+int_13_dl]  ; BL = drive number
-	shl	bx,1			; table index, multiply by 4
-	shl	bx,1
-    cs	mov	bl,byte [(drive_config+1)+bx] ; BL = FDC number
-	shl	bx,1
+	mov	bl,byte [bp+fdc_num]
+	mov	bh,0			; BX = FDC number
+	shl	bx,1			; table index, mulitply by 4
 	shl	bx,1
     cs	mov	bl,byte [(fdc_config+3)+bx] ; BL = FDC's DMA channel number
 
@@ -1006,10 +1004,10 @@ fdc_configure_dma:
 	shl	dx,1			; DX = DMA controller base address
 					; register for selected channel
 	cli
-	out	dmac_ff_reg,al		; clear first/last flip-flop
-	jmp	$+2
-	jmp	$+2
 	out	dmac_mode_reg,al	; send DMA mode byte
+	jmp	$+2
+	jmp	$+2
+	out	dmac_ff_reg,al		; clear first/last flip-flop
 	jmp	$+2
 	jmp	$+2
 	mov	al,cl
@@ -1020,6 +1018,9 @@ fdc_configure_dma:
 	jmp	$+2
 	mov	al,ch
 	out	dx,al			; send word count - high byte
+	jmp	$+2
+	jmp	$+2
+	out	dmac_ff_reg,al		; clear first/last flip-flop
 	jmp	$+2
 	jmp	$+2
 	mov	al,bl
@@ -1142,7 +1143,8 @@ fdc_write:
 	mov	dx,fdc_data_reg
 	add	dx,[bp+fdc_base]	; get register address for current FDC
 	out	dx,al			; write byte
-	clc				; XXXXX clear just in case
+;	clc				; Optimization:
+					; CF = 0 because add never overflows
 
 .exit:
 	pop	dx
@@ -1233,7 +1235,8 @@ fdc_read:
 	mov	dx,fdc_data_reg
 	add	dx,[bp+fdc_base]	; get register address for current FDC
 	in	al,dx			; read the byte
-	clc				; XXXXX - clear, just in case it is set
+;	clc				; Optimization:
+					; CF = 0 because add never overflows
 
 .exit:
 	pop	dx
@@ -1323,8 +1326,7 @@ fdc_reset:
 ;=========================================================================
 ; fdc_detect_media - Detect media type, update it in the data area
 ; Input:
-;	[BP+int_13_dl] = drive number - XXXX - not correct
-;					 get_drive_type uses DL
+;	[BP+int_13_dl] = drive number
 ; Output:
 ;	CF clear if successful
 ;		AH = 00h
@@ -1521,7 +1523,7 @@ fdc_set_rate:
 ;	CF set if no interrupt
 ;		AH = 80h - timeout
 ;	BX = fdc_calib_state
-;	AL,CX - trashed ; XXXXX - CX is not trashed
+;	AL - trashed
 ;-------------------------------------------------------------------------
 %ifdef AT
 
