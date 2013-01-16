@@ -99,11 +99,8 @@ init:
 	push	si
 	push	ds
 
-;-------------------------------------------------------------------------
-; set DS to interrupt table / BIOS data area
-
-	xor	ax,ax			; DS = 0
-	mov	ds,ax
+	mov	ax,biosdseg
+	mov	ds,ax			; set DS to the BIOS data area
 
 ;-------------------------------------------------------------------------
 ; print the copyright message
@@ -133,6 +130,8 @@ init:
 	jz	.config_no_key
 	mov	ah,00h
 	int	16h			; read the keystroke
+	cmp	al,1Bh			; ESC?
+	je	.config_esc
 	cmp	ax,3C00h		; F2?
 	jne	.config_no_key
 	mov	si,msg_crlf
@@ -153,13 +152,14 @@ init:
 .config_no_key:
 
 ; this code waits approximately 18.2 ms
-	mov	dx,word [ticks_lo+(biosdseg<<4)]
+	mov	dx,word [ticks_lo]
 
 .wait:
-	cmp	dx,word [ticks_lo+(biosdseg<<4)]
+	cmp	dx,word [ticks_lo]
 	je	.wait
 	loop	.config_loop
 
+.config_esc:
 	mov	si,msg_crlf
 	call	print
 
@@ -179,7 +179,7 @@ set_equipment:
 	jb	.count_drives_loop	; repeat for the next drive number
 
 .count_drives_done:
-	mov	al,byte [equipment_list+(biosdseg<<4)]
+	mov	al,byte [equipment_list]
 					; set all floppy bits to 0
 	and	al,~(equip_floppies|equip_floppy_num)
 	cmp	dl,0
@@ -192,27 +192,58 @@ set_equipment:
 	or	al,dl			; set number of floppies
 
 .exit:
-	mov	byte [equipment_list+(biosdseg<<4)],al
+	mov	byte [equipment_list],al
 
 ;-------------------------------------------------------------------------
+; clear the data areas (AT standard)
+
+	xor	ax,ax
+	mov	cx,0FFFFh
+	mov	word [fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
+	mov	word [fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
+	mov	byte [fdc_last_rate],al
+	mov	byte [fdc_info],0	; FIXME - what is the default?
+	mov	word [fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
+	mov	word [fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
+	mov	word [fdc_cylinder],cx	; make it seek the first time
+
+
+; set the transfer rate of the primary FDC to a known value (500 Kbit/sec)
+
+    cs	mov	dx,word [fdc_config]	; DX = primary FDC base address
+	out	dx,al			; Note: AL = 00
+
 ; clear the data areas used for > 2 drive support
 
-	push	ds
     cs  lds	bx,[fdc_media_state_addr]
-	mov	word [bx],0		; clear 4 bytes
-	mov	word [bx+2],0
+	mov	word [bx],ax		; clear 4 bytes
+	mov	word [bx+2],ax
     cs  lds	bx,[fdc_cylinder_addr]
-	mov	word [bx],0		; clear 6 bytes
-	mov	word [bx+2],0
-	mov	word [bx+4],0
+	mov	word [bx],cx		; make it seek the first time
+	mov	word [bx+2],cx
+	mov	word [bx+4],cx
     cs  lds	bx,[fdc_motor_state_addr]
-	mov	word [bx],0		; clear 2 bytes
-	pop	ds
+	mov	word [bx],ax		; clear 2 bytes
+
+; check if there is a secondary FDC
+
+    cs  mov	dx,word [fdc_config+4]	; DX = secondary FDC base address
+	or	dx,dx			; DX == 0? (no secondary FDC)
+	jz	set_interrupts		; no secondary FDC
+
+; set the transfer rate of the secondary FDC to a known value (500 Kbit/sec)
+
+	add	dx,fdc_ccr_reg
+	mov	al,00h
+	out	dx,al
 
 ;-------------------------------------------------------------------------
 ; set interrupt vectors and unmask interrupts on PIC
 
+set_interrupts:
 	cli
+
+	mov	ds,ax			; set DS to the interrupt table
 
 ; set interrupt vector for the primary FDC
 
@@ -235,7 +266,7 @@ set_equipment:
 
 ; check if there is a secondary FDC
 
-    cs  cmp	word [fdc_config+4],0	; secondary FDC configured?
+	cmp	dx,0			; secondary FDC configured?
 	je	.no_fdc2		; no secondary FDC, skip interrupt
 					; initialization for it
 
@@ -283,7 +314,6 @@ set_equipment:
 
 ; check if the original INT 13h points to the INT 13h entry point
 ; (this means that no hard drive BIOS was installed)
-; FIXME: need better check, e.g. call INT 13h AH=15
 
 	cmp	word [vect_int_13],0EC59h ; BIOS INT 13h entry point (offset)
 	jne	.set_floppy_isr		; looks like INT 13h was changed
@@ -492,18 +522,6 @@ config_util:
 
 ;-------------------------------------------------------------------------
 ; add a drive
-
-; - check that there is a slot available ( < 4 drives with one FDC or < 8 with two FDCs
-;   - if not, print error message, exit
-; - ask for logical drive number, check that it is <= (current number of drives + 1)
-;   - if not, print error message, ask again.
-; - check what FDCs have available physical drive numbers
-;   - if both FDCs have - ask FDC number, otherwise use one with available numbers, and notify user
-; - check for available physical drive numbers on selected FDC
-;   - if several numbers are available - ask drive number, otherwise use one that is available
-; - ask user for the drive type
-;
-; - insert new drive into the configuration, shift down drives if needed
 
 .add_drive:
 	call	.count_drives
@@ -990,16 +1008,16 @@ set_media_state:
 ; Input:
 ;	[BP+fdc_num] = FDC number
 ; Output:
-;	AL = FDC rate (bits 7 - 6), other bits set to 0
+;	AH = FDC rate (bits 7 - 6), other bits set to 0
 ;-------------------------------------------------------------------------
 get_last_rate:
-	mov	al,byte [fdc_last_rate]
+	mov	ah,byte [fdc_last_rate]
 	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
 	je	.fdc1
-	shl	al,1			; move rate bits to bits 7 - 6
-	shl	al,1			; for the secondary FDC
+	shl	ah,1			; move rate bits to bits 7 - 6
+	shl	ah,1			; for the secondary FDC
 .fdc1:
-	and	al,0C0h			; clear non data rate bits
+	and	ah,fdc_m_rate_bits	; clear non data rate bits
 	ret
 	
 ;=========================================================================
@@ -1012,7 +1030,7 @@ get_last_rate:
 ;-------------------------------------------------------------------------
 set_last_rate:
 	push	ax
-	and	al,0C0h			; get the data rate bits only
+	and	al,fdc_m_rate_bits	; get the data rate bits only
 	mov	ah,3Fh			; AND mask for data rate bits
 	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
 	je	.fdc1
