@@ -930,31 +930,27 @@ add_drive:
 ;=========================================================================
 ; get_media_state - Get drive's media state from the data area
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+phys_drive] = physical drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	BL = drive's media state
 ;	BH = 0 (destroyed)
 ;-------------------------------------------------------------------------
 get_media_state:
-	push	si
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	mov	si,bx			; SI = drive number
-	shl	si,1			; table index, multiply by 4
-	shl	si,1
-    cs	mov	bl,byte [(drive_config+2)+si] ; BL = physical drive number
-    cs  cmp	byte [(drive_config+1)+si],1 ; drive is on the secondary FDC?
+	mov	bl,byte [bp+phys_drive]
+	mov	bh,0			; BX = physical drive number
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	mov	bl,byte [fdc_media_state+bx]
-	jmp	.exit
+	ret
 
 .fdc2:
+	push	si
 	push	ds
     cs	lds	si,[fdc_media_state_addr]
 	add	si,bx
 	mov	bl,byte [si]
 	pop	ds
-.exit:
 	pop	si
 	ret
 
@@ -962,77 +958,63 @@ get_media_state:
 ; set_media_state - Store drive's media state in the data area
 ; Input:
 ;	AL = media state
-;	[BP+int_13_dl] = drive number
+;	[BP+phys_drive] = physical drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
 set_media_state:
 	push	bx
-	push	si
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	mov	si,bx			; SI = drive number
-	shl	si,1			; table index, multiply by 4
-	shl	si,1
-    cs	mov	bl,byte [(drive_config+2)+si] ; BL = physical drive number
-    cs	cmp	byte [(drive_config+1)+si],1 ; drive is on the secondary FDC?
+	mov	bl,byte [bp+phys_drive]
+	mov	bh,0			; BX = physical drive number
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	mov	byte [fdc_media_state+bx],al
 	jmp	.exit
 
 .fdc2:
+	push	si
 	push	ds
     cs	lds	si,[fdc_media_state_addr] ; DS:SI = address of media state area
 	add	si,bx
 	mov	byte [si],al
 	pop	ds
+	pop	si
 
 .exit:
-	pop	si
 	pop	bx
 	ret
 
 ;=========================================================================
 ; get_last_rate - Get last FDC rate from the BIOS data area
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	AL = FDC rate (bits 7 - 6), other bits set to 0
 ;-------------------------------------------------------------------------
 get_last_rate:
-	push	bx
 	mov	al,byte [fdc_last_rate]
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1			; table index, multiply by 4
-	shl	bx,1
-    cs	cmp	byte [(drive_config+1)+bx],0 ; drive is on the primary FDC?
+	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
 	je	.fdc1
 	shl	al,1			; move rate bits to bits 7 - 6
 	shl	al,1			; for the secondary FDC
 .fdc1:
 	and	al,0C0h			; clear non data rate bits
-	pop	bx
 	ret
 	
 ;=========================================================================
 ; set_last_rate - Store last FDC rate in the BIOS data area
 ; Input:
 ;	AL = FDC rate (bits 7 - 6)
-;	[BP+int_13_dl] = drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
 set_last_rate:
 	push	ax
-	push	bx
 	and	al,0C0h			; get the data rate bits only
 	mov	ah,3Fh			; AND mask for data rate bits
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1			; table index, multiply by 4
-	shl	bx,1
-    cs	cmp	byte [(drive_config+1)+bx],0 ; drive is on the primary FDC?
+	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
 	je	.fdc1
 	shr	al,1			; move rate bits to 5 - 4
 	shr	al,1			; for the secondary FDC
@@ -1040,7 +1022,6 @@ set_last_rate:
 .fdc1:
 	and	byte [fdc_last_rate],ah	; clear rate bits
 	or	byte [fdc_last_rate],al	; set new bits
-	pop	bx
 	pop	ax
 	ret
 
@@ -1048,20 +1029,16 @@ set_last_rate:
 ; check_cylinder - Compare specified cylinder with value in the BIOS data area
 ; Input:
 ;	CH = current cylinder
-;	[BP+int_13_dl] = drive number
+;	[BP+phys_drive] = physical drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	ZF = 1 - cylinder matches
 ;-------------------------------------------------------------------------
 check_cylinder:
 	push	bx
-	push	si
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	mov	si,bx			; SI = drive number
-	shl	si,1			; table index, multiply by 4
-	shl	si,1
-    cs	mov	bl,byte [(drive_config+2)+si] ; BL = physical drive number
-    cs	cmp	byte [(drive_config+1)+si],1 ; drive is on the secondary FDC?
+	mov	bl,byte [bp+phys_drive]
+	mov	bh,0			; BX = physical drive number
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	cmp	bl,2			; drive number below 2 (0 or 1)?
 	jae	.fdc1_drive23
@@ -1073,14 +1050,15 @@ check_cylinder:
 	inc 	bx			; are stored after secondary FDC drives
 
 .fdc2:
+	push	si
 	push	ds
     cs	lds	si,[fdc_cylinder_addr]	; DS:SI = address of cylinder area
 	add	si,bx
 	cmp	byte [si],ch
 	pop	ds
+	pop	si
 
 .exit:
-	pop	si
 	pop	bx
 	ret
 
@@ -1088,20 +1066,16 @@ check_cylinder:
 ; set_cylinder - Store drive's current cylinder into the BIOS data area
 ; Input:
 ;	CH = current cylinder
-;	[BP+int_13_dl] = drive number
+;	[BP+phys_drive] = physical drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
 set_cylinder:
 	push	bx
-	push	si
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	mov	si,bx			; SI = drive number
-	shl	si,1			; table index, multiply by 4
-	shl	si,1
-    cs	mov	bl,byte [(drive_config+2)+si] ; BL = physical drive number
-    cs	cmp	byte [(drive_config+1)+si],1 ; drive is on the secondary FDC?
+	mov	bl,byte [bp+phys_drive]
+	mov	bh,0			; BX = physical drive number
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	cmp	bl,2			; drive number below 2 (0 or 1)?
 	jae	.fdc1_drive23
@@ -1113,14 +1087,15 @@ set_cylinder:
 	inc 	bx			; are stored after secondary FDC drives
 
 .fdc2:
+	push	si
 	push	ds
     cs	lds	si,[fdc_cylinder_addr]	; DS:SI = address of cylinder area
 	add	si,bx
 	mov	byte [si],ch
 	pop	ds
+	pop	si
 
 .exit:
-	pop	si
 	pop	bx
 	ret
 
@@ -1128,48 +1103,39 @@ set_cylinder:
 ; check_drive_calibrated - Check if the drive calibrated bit is set
 ;			   in the BIOS data area
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+phys_drive] = physical drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	CF = 1 - bit set (drive calibrated)
 ;-------------------------------------------------------------------------
 check_drive_calibrated:
-	push	bx
 	push	cx
 	mov	ch,byte [fdc_calib_state] ; calibration state for primary FDC
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1
-	shl	bx,1
-    cs	mov	cl,byte [(drive_config+2)+bx] ; CL = physical drive number
+	mov	cl,byte [bp+phys_drive]	; CL = physical drive number
 	inc	cl
-    cs	cmp	byte [(drive_config+1)+bx],0 ; drive is on the primary FDC?
+	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
 	je	.fdc1
 	mov	ch,byte [fdc_last_rate]	; calibration state for secodary FDC
 
 .fdc1:
 	shr	ch,cl			; set CF if drive is calibrated
 	pop	cx
-	pop	bx
 	ret
 
 ;=========================================================================
 ; set_drive_calibrated - Set drive calibrated bit in the BIOS data area
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+phys_drive] = physical drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
 set_drive_calibrated:
-	push	bx
 	push	cx
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1
-	shl	bx,1
-    cs	mov	cl,byte [(drive_config+2)+bx] ; CL = physical drive number
+	mov	cl,byte [bp+phys_drive]	; CL = physical drive number
 	mov	ch,1			; bit 0 set
 	shl	ch,cl			; move it into the right position
-    cs	cmp	byte [(drive_config+1)+bx],0 ; drive is on the primary FDC?
+	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
 	je	.fdc1
 	or	byte [fdc_last_rate],ch	; set the bit for the secodary FDC
 	jmp	.exit
@@ -1179,78 +1145,46 @@ set_drive_calibrated:
 
 .exit:
 	pop	cx
-	pop	bx
 	ret
 
 ;=========================================================================
 ; reset_calib_state - Reset calibration state for all drives on an FDC
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
 reset_calib_state:
-	push	bx
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1
-	shl	bx,1
-    cs	cmp	byte [(drive_config+1)+bx],0 ; drive is on the primary FDC?
+	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
 	je	.fdc1
 	and	byte [fdc_last_rate],0F0h ; clear calibration for secodary FDC
-	jmp	.exit
+	ret
 
 .fdc1:
 	and	byte [fdc_calib_state],0F0h ; clear calibration for primary FDC
-
-.exit:
-	pop	bx
-	ret
-
-;=========================================================================
-; get_phys_drive - Get physical drive number 
-; Input:
-;	[BP+int_13_dl] = drive number
-; Output:
-;	DL = physical drive number
-;-------------------------------------------------------------------------
-get_phys_drive:
-	push	bx
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1			; table index, multiply by 4
-	shl	bx,1
-    cs	mov	dl,byte [(drive_config+2)+bx] ; DL = physical drive number
-	pop	bx
 	ret
 
 ;=========================================================================
 ; get_motor_state - Return motor state byte from the BIOS data area
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	AL = motor state
 ;-------------------------------------------------------------------------
 get_motor_state:
-	push	bx
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1
-	shl	bx,1
-    cs	cmp	byte [(drive_config+1)+bx],1 ; drive is on the secondary FDC?
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	mov	al,byte [fdc_motor_state] ; AL = motor state byte
 					; for the primary FDC
-	jmp	.exit
+	ret
 
 .fdc2:
+	push	bx
 	push	ds
     cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
 					; for the secondary FDC
 	mov	al,byte [bx]		; motor state byte for the secondary FDC
 	pop	ds
-
-.exit:
 	pop	bx
 	ret
 
@@ -1258,31 +1192,25 @@ get_motor_state:
 ; check_motor_state_write - Check write mode bit in the motor state byte
 ;			in the BIOS data area
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	ZF = 1 - write mode
 ;-------------------------------------------------------------------------
 check_motor_state_write:
-	push	bx
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1
-	shl	bx,1
-    cs	cmp	byte [(drive_config+1)+bx],1 ; drive is on the secondary FDC?
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	test	byte [fdc_motor_state],fdc_write_flag ; test the write bit
 					; in the byte for the primary FDC
-	jmp	.exit
+	ret
 
 .fdc2:
+	push	bx
 	push	ds
     cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
 					; for the secondary FDC
 	test	byte [bx],fdc_write_flag ; test the write bit 
 					; in byte for the secondary FDC
 	pop	ds
-
-.exit:
 	pop	bx
 	ret
 
@@ -1290,29 +1218,23 @@ check_motor_state_write:
 ; set_motor_state - Set motor state byte in the BIOS data area
 ; Input:
 ;	AL = new motor state
-;	[BP+int_13_dl] = drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
 set_motor_state:
-	push	bx
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1
-	shl	bx,1
-    cs	cmp	byte [(drive_config+1)+bx],1 ; drive is on the secondary FDC?
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	mov	byte [fdc_motor_state],al ; set the byte for the primary FDC
-	jmp	.exit
+	ret
 
 .fdc2:
+	push	bx
 	push	ds
     cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
 					; for the secondary FDC
 	mov	byte [bx],al		; set the byte for the secondary FDC
 	pop	ds
-
-.exit:
 	pop	bx
 	ret
 
@@ -1320,31 +1242,25 @@ set_motor_state:
 ; set_motor_state_read - Clear write mode bit in the motor state byte
 ;			in the BIOS data area
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
 set_motor_state_read:
-	push	bx
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1
-	shl	bx,1
-    cs	cmp	byte [(drive_config+1)+bx],1 ; drive is on the secondary FDC?
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	and	byte [fdc_motor_state],~fdc_write_flag ; clear the write bit
 					; in the byte for the primary FDC
-	jmp	.exit
+	ret
 
 .fdc2:
+	push	bx
 	push	ds
     cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
 					; for the secondary FDC
 	and	byte [bx],~fdc_write_flag ; clear the write bit
 					; in the byte for the secondary FDC
 	pop	ds
-
-.exit:
 	pop	bx
 	ret
 
@@ -1352,31 +1268,25 @@ set_motor_state_read:
 ; set_motor_state_write - Set write mode bit in the motor state byte
 ;			in the BIOS data area
 ; Input:
-;	[BP+int_13_dl] = drive number
+;	[BP+fdc_num] = FDC number
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
 set_motor_state_write:
-	push	bx
-	mov	bl,byte [bp+int_13_dl]	; BL = drive number
-	mov	bh,0
-	shl	bx,1
-	shl	bx,1
-    cs	cmp	byte [(drive_config+1)+bx],1 ; drive is on the secondary FDC?
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	jae	.fdc2
 	or	byte [fdc_motor_state],fdc_write_flag ; set the write bit
 					; in the byte for the primary FDC
-	jmp	.exit
+	ret
 
 .fdc2:
+	push	bx
 	push	ds
     cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
 					; for the secondary FDC
 	or	byte [bx],fdc_write_flag ; set the write bit 
 					; in byte for the secondary FDC
 	pop	ds
-
-.exit:
 	pop	bx
 	ret
 
@@ -1733,7 +1643,6 @@ int_timer:
 %include	"floppy1.inc"		; floppy services
 %include	"floppy2.inc"
 %include	"messages.inc"		; messages
-;%include	"inttrace.inc"
 
 ;=========================================================================
 ; eprom_write - Write data to the EEPROM
@@ -1884,8 +1793,8 @@ fdc_motor_state_addr:
 		dw	(0B2h * 4 + 2)	; offset
 		dw	0		; segment
 
-; configuration prompt delay in 18.2 ms units
-config_delay	dw	110		; approximately 2 seconds
+; configuration prompt delay in 55 ms units
+config_delay	dw	36		; approximately 2 seconds
 
 ; call the original timer interrupt service routine
 orig_timer_isr:
