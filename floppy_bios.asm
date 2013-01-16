@@ -1764,7 +1764,7 @@ fdc_config:
 .fdc0	dw	03F0h			; Primary FDC address
 	db	06h			; Primary FDC IRQ
 	db	02h			; Primary FDC DMA channel
-.fdc1	dw	0370h			; Secondary FDC address
+.fdc1	dw	0000h			; Secondary FDC address
 	db	07h			; Secondary FDC IRQ
 	db	03h			; Secondary FDC DMA channel
 
