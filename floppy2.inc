@@ -437,7 +437,6 @@ int_13_fn05:
 	call	fdc_send_specify	; send FDC Specify command
 
 	mov	ch,byte [bp+int_13_ch]	; cylinder
-;	mov	dh,byte [bp+int_13_dh]	; XXXXX - just in case DH got corrupted
 	call 	fdc_seek		; seek drive DL to cylinder CH, head DH
 	jc	.error_fdc_get_result	; jump if seek failed
 
