@@ -1710,18 +1710,18 @@ eeprom_write_code:
 	inc	di
 	loop	.write_loop		; write the next byte
 
-.failed:
-	mov	ax,((0Eh << 8) + 'E')	; INT 10 function 0Eh - teletype output
-	int	10h
-	stc				; failed to write EEPROM
-	jmp	.exit
-
 .done:
 	clc				; completed successfully
 
 .exit:
 	sti
 	retf
+
+.failed:
+	mov	ax,((0Eh << 8) + 'E')	; INT 10 function 0Eh - teletype output
+	int	10h
+	stc				; failed to write EEPROM
+	jmp	.exit
 
 eeprom_write_size	equ	($-eeprom_write_code)
 
