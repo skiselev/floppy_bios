@@ -195,18 +195,19 @@ set_equipment:
 	mov	byte [equipment_list],al
 
 ;-------------------------------------------------------------------------
-; clear the data areas (AT standard)
+; clear the data areas
+; Note: No need to clear current cylinder variables - they will be set
+;	correctly when drives are calibrated on the first use.
+
+; chear the PC/AT standard BIOS variables
 
 	xor	ax,ax
-	mov	cx,0FFFFh
 	mov	word [fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
 	mov	word [fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
 	mov	byte [fdc_last_rate],al
 	mov	byte [fdc_info],0	; FIXME - what is the default?
 	mov	word [fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
 	mov	word [fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
-	mov	word [fdc_cylinder],cx	; make it seek the first time
-
 
 ; set the transfer rate of the primary FDC to a known value (500 Kbit/sec)
 
@@ -218,10 +219,6 @@ set_equipment:
     cs  lds	bx,[fdc_media_state_addr]
 	mov	word [bx],ax		; clear 4 bytes
 	mov	word [bx+2],ax
-    cs  lds	bx,[fdc_cylinder_addr]
-	mov	word [bx],cx		; make it seek the first time
-	mov	word [bx+2],cx
-	mov	word [bx+4],cx
     cs  lds	bx,[fdc_motor_state_addr]
 	mov	word [bx],ax		; clear 2 bytes
 
