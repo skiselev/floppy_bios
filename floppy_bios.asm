@@ -1684,12 +1684,12 @@ eeprom_write_code:
 .write_data:
     es	mov	byte [di],dh		; ES:[DI] = AL (write to EEPROM)
 
-	xor	bx,bx			; counter for the delay
+	xor	ax,ax			; counter for the delay
 
 .write_wait:
     es	cmp	byte [di],dh		; ES:[DI] == AL?
 	je	.write_ok		; write operation is successful
-	dec	bx
+	dec	ax
 	jnz	.write_wait		; poll again
 	or	dl,dl			; SDP is enabled?
 	jnz	.failed			; write failed, even with SDP enabled
@@ -1708,10 +1708,7 @@ eeprom_write_code:
 .write_next:
 	inc	si
 	inc	di
-	dec	cx
-	jz	.done
-	or	dl,dl			; SDP is enabled (BH = 1)?
-	jz	.write_loop		; if not, just write the next byte
+	loop	.write_loop		; write the next byte
 
 .failed:
 	mov	ax,((0Eh << 8) + 'E')	; INT 10 function 0Eh - teletype output
