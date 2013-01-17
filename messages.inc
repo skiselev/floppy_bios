@@ -56,7 +56,7 @@ tbl_floppy	dw	msg_floppy_none
 		dw	msg_floppy_none
 msg_config	db	'Press F2 to run the configuration utility...', 00h
 msg_cfg_welcome	db	'Welcome to the Multi-Floppy BIOS configuration utility.', 00h
-msg_cfg_help	db	0Dh, 0Ah, 'Floppy BIOS configuration help:', 0Dh, 0Ah
+msg_cfg_help	db	0Dh, 0Ah, 'Multi-Floppy BIOS configuration help:', 0Dh, 0Ah
 		db	'a - Add a floppy drive', 0Dh, 0Ah
 		db	'd - Delete a floppy drive', 0Dh, 0Ah
 		db	'e - Enable and configure the secondary floppy disk controller', 0Dh, 0Ah
