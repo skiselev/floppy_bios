@@ -603,7 +603,7 @@ int_13_fn18:
 ;=========================================================================
 ; fdc_recalibrate - Recalibrate disk drive, seek to cylinder 0
 ; Input:
-;	DL = drive number (0 to 7)
+;	[BP+phys_drive] = physical drive number
 ; Output:
 ;	CF clear if successful
 ;		AH = 00h - successful completion
@@ -1333,7 +1333,7 @@ fdc_detect_media:
 	push	cx
 
 	mov	ah,fdc_e_failure	; in case the get_drive_type fails
-	mov	dl,[BP+int_13_dl]	; restore DL in case it was trashed
+	mov	dl,[bp+int_13_dl]	; restore DL in case it was trashed
 	call	get_drive_type		; get drive type to AL
 	jc	.exit			; drive doesn't exist or invalid type
 
@@ -1410,7 +1410,7 @@ fdc_detect_media:
 ; fdc_read_id - Read ID
 ; Input:
 ;	AL = data transfer rate (bits 7-6)
-;	[BP+int_13_dl] = drive number
+;	[BP+phys_drive] = physical drive number
 ; Output:
 ;	CF clear if successful
 ;		AH = 0 - successful completion
@@ -1435,7 +1435,7 @@ fdc_read_id:
 .read_id_loop:
 	push	cx
 	mov	al,4Ah			; FDC Read ID command
-	mov	ah,dl			; read id - byte 1 (head = 0 / drive)
+	mov	ah,[bp+phys_drive]	; read id - byte 1 (head = 0 / drive)
 	mov	cl,2			; 2 byte commands
 	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ6 flag
 	call	fdc_send_cmd
@@ -1463,7 +1463,7 @@ fdc_read_id:
 	ret
 
 ;=========================================================================
-; fdc_set_rate - Set transfer rate if different from previous setting
+; fdc_set_rate - Set transfer rate
 ; Input:
 ;	AL = transfer rate (bits 7 and 6)
 ;		00h - 500 Kbps (1.2M and 1.44M disks)
@@ -1475,17 +1475,18 @@ fdc_read_id:
 ;-------------------------------------------------------------------------
 fdc_set_rate:
 	push	ax
-	call	get_last_rate		; AH = last transfer rate
-	and	al,fdc_m_rate_bits
-	cmp	al,ah
-	je	.exit			; skip set if the same as previous rate
-	call	set_last_rate		; save the transfer rate
+	and	al,fdc_m_rate_bits	; get the data rate bits only
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
+	jae	.fdc2			; in this case skip the BIOS area update
+	and	byte [fdc_last_rate],~fdc_m_rate_bits ; clear rate bits
+	or	byte [fdc_last_rate],al	; set new rate bits
+
+.fdc2:
 	rol	al,1
 	rol	al,1
 	mov	dx,fdc_ccr_reg
 	add	dx,[bp+fdc_base]	; get register address for current FDC
 	out	dx,al
-.exit:
 	mov	dx,word [bp+int_13_dx]	; restore DX
 	pop	ax
 	ret
