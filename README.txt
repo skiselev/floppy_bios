@@ -1,13 +1,13 @@
-README file for ISA Floppy BIOS Extension
-*****************************************
+README file for Multi-Floppy BIOS Extension
+*******************************************
 
 General Information
 ===================
 
-The ISA Floppy BIOS Extension provides support for up to 8 floppy drives
-connected to two floppy disk controllers (FDCs). It supports any combination
-of standard IBM PC/XT/AT and PS/2 floppy drives, with disk sizes from 180 KB
-to 2.88 MB.
+The Multi-Floppy Floppy BIOS Extension provides support for up to 8 floppy
+drives connected to two floppy disk controllers (FDCs). It supports any
+combination of standard IBM PC/XT/AT and PS/2 floppy drives, with disk sizes
+from 180 KB to 2.88 MB.
 
 Configuration Utility
 ---------------------
@@ -51,7 +51,7 @@ Implementation Notes
 Additional storage for 8 drives support
 ---------------------------------------
 
-The ISA Floppy BIOS extension uses 11 bytes in addition to standard BIOS
+The Multi-Floppy BIOS extension uses 11 bytes in addition to standard BIOS
 data area variables for storing status information for the secondary FDC and
 drives from 3 to 8.
 
@@ -78,7 +78,7 @@ In addition the format of the 'last rate' BIOS variable (0040h:008Bh) is
 redifined as follows
 
 bits 7 - 6:	last data rate set for the primary FDC (same as on an AT)
-bits 5 - 4:	last data rate set for the secondary FDC
+bits 5 - 4:	not used
 bits 3 - 0:	calibrated bits for the 4 drives on the secondary FDC
 
 
