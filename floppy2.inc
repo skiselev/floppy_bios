@@ -245,7 +245,8 @@ int_13_fn04:
 	test	bl,fdc_m_established
 	jz	.establish_media	; jump if media type is not established
 
-	call	fdc_select_rate		; select transfer rate
+	mov	al,bl			; media type to AL (transfer rate)
+	call	fdc_set_rate		; select transfer rate
 	jmp	.fdc_send_specify
 
 ; 360K and 720K drives don't support change line, and only support
@@ -433,7 +434,8 @@ int_13_fn05:
 	call	fdc_motor_on
 	call	fdc_disk_change		; read disk change line
 	jc	.error_end_io		; jump if disk change check failed
-	call	fdc_select_rate		; select transfer rate
+	mov	al,bl			; media type to AL (transfer rate)
+	call	fdc_set_rate		; select transfer rate
 	call	fdc_send_specify	; send FDC Specify command
 
 	mov	ch,byte [bp+int_13_ch]	; cylinder
