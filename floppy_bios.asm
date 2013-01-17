@@ -505,17 +505,10 @@ config_util:
 	inc	bx
 	inc	dx
 	dec	cx
-	jz	.print_dump_done
+	jz	.cfg_loop		; back to the configuration prompt
 	test	dx,000Fh
 	jz	.print_dump		; print next 16 bytes
 	jmp	.print_dump_inner	; print the next byte
-
-
-.print_dump_done:
-	mov	si,msg_crlf
-	call	print
-	stc				; failed to save configuraion
-	jmp	.exit
 
 ;-------------------------------------------------------------------------
 ; add a drive
