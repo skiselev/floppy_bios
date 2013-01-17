@@ -91,32 +91,22 @@ int_13:
 	mov	bx,biosdseg
 	mov	ds,bx			; DS = BIOS data segment (0040h)
 
-; fn01, and fn08 don't need physical drive information
+; fn01 doesn't need physical drive information
 
 	cmp	ah,01h
 	je	int_13_fn01		; Get status of last operation
-	cmp	ah,08h
-	je	int_13_fn08		; Get drive parameters
 
-; get pointer to the drive configuration and the drive type
 
 	cmp	dl,(NUM_DRIVES-1)
-	ja	.invalid_parameters	; invalid drive number (>= NUM_DRIVES)
+	ja	.try_fn08		; invalid drive number, but try fn08
+
+; get physical drive information
+
 	mov	bl,dl
 	mov	bh,0			; drive number to BX
 	shl	bx,1			; multiply by 4:
 	shl	bx,1			; 4 bytes per drive_config entry
     cs	mov	al,byte [drive_config+bx] ; AL = drive type
-
-; fn15 reports status '00h' for drive not present
-
-	cmp	ah,15h
-	je	int_13_fn15		; Get disk type
-
-; get physical drive information for all other functions
-
-	cmp	al,type_none
-	je	.invalid_parameters	; drive not present or not configured
     cs	mov	bx,word [drive_config+1+bx] ; BL = FDC number
 					;  BH = physical drive number
 	mov	word [bp+fdc_num],bx	; store both in stack variables
@@ -125,6 +115,25 @@ int_13:
 	shl	bx,1			; 4 bytes per fdc_config_entry
     cs	mov	bx,word [fdc_config+bx]	; BX = FDC base address
 	mov	word [bp+fdc_base],bx	; store FDC base address in stack var.
+
+; fn08 needs physical drive information, but can accept drive numbers 0 - 7Fh
+
+.try_fn08:
+	cmp	ah,08h
+	je	int_13_fn08		; Get drive parameters
+
+	cmp	dl,(NUM_DRIVES-1)
+	ja	.invalid_parameters	; invalid drive number (>= NUM_DRIVES)
+
+; fn15 accepts not existing drive numbers (and returns status 00h for them)
+
+	cmp	ah,15h
+	je	int_13_fn15		; Get disk type
+
+; all other functions require an existing drive number
+
+	cmp	al,type_none
+	je	.invalid_parameters	; drive not present or not configured
 
 ; dispatch
 
