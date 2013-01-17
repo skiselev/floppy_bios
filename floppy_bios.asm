@@ -1802,7 +1802,7 @@ fdc_motor_state_addr:
 		dw	0		; segment
 
 ; configuration prompt delay in 55 ms units
-config_delay	dw	36		; approximately 2 seconds
+config_delay	dw	55		; approximately 3 seconds
 
 ; call the original timer interrupt service routine
 orig_timer_isr:
