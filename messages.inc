@@ -22,10 +22,10 @@
 ;=========================================================================
 
 msg_copyright	db	0Dh, 0Ah
-		db	"Sergey's Floppy BIOS, Version "
+		db	"Multi-Floppy BIOS, Version "
 		db	VERSION
 		db	". "
-		db	"Copyright (C) 2010 - 2012 Sergey Kiselev", 0Dh, 0Ah
+		db	"Copyright (C) 2010 - 2013 Sergey Kiselev", 0Dh, 0Ah
 		db	"Distributed under the terms of "
 		db	"the GNU General Public License", 0Dh, 0Ah
 msg_crlf	db      0Dh, 0Ah, 00h
@@ -54,8 +54,8 @@ tbl_floppy	dw	msg_floppy_none
 		dw	msg_floppy_none
 		dw	msg_floppy_2880
 		dw	msg_floppy_none
-msg_config	db	'Press F2 to run the floppy BIOS configuration utility.', 00h
-msg_cfg_welcome	db	'Welcome to the Floppy BIOS configuration utility.', 00h
+msg_config	db	'Press F2 to run the configuration utility...', 00h
+msg_cfg_welcome	db	'Welcome to the Multi-Floppy BIOS configuration utility.', 00h
 msg_cfg_help	db	0Dh, 0Ah, 'Floppy BIOS configuration help:', 0Dh, 0Ah
 		db	'a - Add a floppy drive', 0Dh, 0Ah
 		db	'd - Delete a floppy drive', 0Dh, 0Ah
