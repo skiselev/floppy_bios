@@ -205,13 +205,14 @@ set_equipment:
 	mov	word [fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
 	mov	word [fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
 	mov	byte [fdc_last_rate],al
-	mov	byte [fdc_info],0	; FIXME - what is the default?
+	mov	byte [fdc_info],al	; FIXME - what is the default?
 	mov	word [fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
 	mov	word [fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
 
 ; set the transfer rate of the primary FDC to a known value (500 Kbit/sec)
 
     cs	mov	dx,word [fdc_config]	; DX = primary FDC base address
+	add	dx,fdc_ccr_reg
 	out	dx,al			; Note: AL = 00
 
 ; clear the data areas used for > 2 drive support
@@ -231,7 +232,6 @@ set_equipment:
 ; set the transfer rate of the secondary FDC to a known value (500 Kbit/sec)
 
 	add	dx,fdc_ccr_reg
-	mov	al,00h
 	out	dx,al
 
 ;-------------------------------------------------------------------------
@@ -994,46 +994,6 @@ set_media_state:
 	ret
 
 ;=========================================================================
-; get_last_rate - Get last FDC rate from the BIOS data area
-; Input:
-;	[BP+fdc_num] = FDC number
-; Output:
-;	AH = FDC rate (bits 7 - 6), other bits set to 0
-;-------------------------------------------------------------------------
-get_last_rate:
-	mov	ah,byte [fdc_last_rate]
-	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
-	je	.fdc1
-	shl	ah,1			; move rate bits to bits 7 - 6
-	shl	ah,1			; for the secondary FDC
-.fdc1:
-	and	ah,fdc_m_rate_bits	; clear non data rate bits
-	ret
-	
-;=========================================================================
-; set_last_rate - Store last FDC rate in the BIOS data area
-; Input:
-;	AL = FDC rate (bits 7 - 6)
-;	[BP+fdc_num] = FDC number
-; Output:
-;	none
-;-------------------------------------------------------------------------
-set_last_rate:
-	push	ax
-	and	al,fdc_m_rate_bits	; get the data rate bits only
-	mov	ah,3Fh			; AND mask for data rate bits
-	cmp	byte [bp+fdc_num],0	; drive is on the primary FDC?
-	je	.fdc1
-	shr	al,1			; move rate bits to 5 - 4
-	shr	al,1			; for the secondary FDC
-	mov	ah,0CFh			; mask bits 5 - 4
-.fdc1:
-	and	byte [fdc_last_rate],ah	; clear rate bits
-	or	byte [fdc_last_rate],al	; set new bits
-	pop	ax
-	ret
-
-;=========================================================================
 ; check_cylinder - Compare specified cylinder with value in the BIOS data area
 ; Input:
 ;	CH = current cylinder
@@ -1369,16 +1329,16 @@ print_config:
 	call	print_digit		; print FDC number (1 or 2)
 	mov	si,msg_at
 	call	print
-    es	mov	ax,word[bx]		; FDC I/O address
+    es	mov	ax,word [bx]		; FDC I/O address
 	call	print_hex		; print FDC I/O address
 	mov	si,msg_irq
 	call	print
-    es	mov	al,byte[bx+2]		; FDC IEQ
+    es	mov	al,byte [bx+2]		; FDC IEQ
 	mov	ah,0
 	call	print_dec		; print FDC IRQ
 	mov	si,msg_drq
 	call	print
-    es	mov	al,byte[bx+3]		; FDC DRQ
+    es	mov	al,byte [bx+3]		; FDC DRQ
 	call	print_digit		; print FDC IRQ - a single digit number
 	inc	cx
 	cmp	cx,2
