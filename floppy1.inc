@@ -587,10 +587,7 @@ int_13_fn18:
 
 .set_media:
 	call	set_media_state		; set drive media state (in AL)
-	call	fdc_set_rate		; transfer rate in AL
-	ror	al,1			; move rate from bits 1,0 to 7,6
-	ror	al,1
-	call	set_last_rate		; store new rate in the BIOS data area
+	call	fdc_set_rate		; transfer rate in AL (bits 7-6)
 	mov	word [bp+int_13_di],di	; return parameters table - offset
 	mov	cx,cs
 	mov	es,cx			; return parameters table - segment
@@ -777,8 +774,6 @@ fdc_seek:
 ; Output:
 ;	none
 ;-------------------------------------------------------------------------
-;msg_dor_reg1	db	'Turn on motor: DX=DOR address AL=Value:', 0Dh, 0Ah, 00h
-;msg_dor_reg2	db	'Motor already on: DX=DOR address AL=Value:', 0Dh, 0Ah, 00h
 fdc_motor_on:
 	push	ax
 	push	cx
@@ -1468,30 +1463,7 @@ fdc_read_id:
 	ret
 
 ;=========================================================================
-; fdc_select_rate - Select FDC transfer rate
-; Input:
-;	none
-; Output:
-;	AL = data transfer rate (bits 7-6)
-;-------------------------------------------------------------------------
-fdc_select_rate:
-	push	bx
-	call	get_media_state		; BL = media state
-	call	get_last_rate		; AL = last rate from the BIOS data area
-	and	bl,0C0h			; mask data rate bits
-	cmp	bl,al			; new rate is the same as the last rate?
-	je	.exit			; exit if rate is already selected
-	mov	al,bl
-	call	set_last_rate		; store new rate in the BIOS data area
-	call	fdc_set_rate		; send new rate (in AL) to FDC
-
-.exit:
-	pop	bx
-	mov	dx,word [bp+int_13_dx]	; restore DX
-	ret
-
-;=========================================================================
-; fdc_set_rate - Set transfer rate
+; fdc_set_rate - Set transfer rate if different from previous setting
 ; Input:
 ;	AL = transfer rate (bits 7 and 6)
 ;		00h - 500 Kbps (1.2M and 1.44M disks)
@@ -1499,18 +1471,23 @@ fdc_select_rate:
 ;		80h - 250 Kbps (360K disk in 360K drive, or 720K disk)
 ;		0C0h - 1 Mbps (2.88M disks)
 ; Output:
-;	AL = transfer rate (bits 1 and 0)
-;		00h - 500 Kbps	01h - 300 Kbps
-;		02h - 250 Kbps	03h - 1 Mbps
-;	DX = FDC CCR (3F7h for primary FDC, 377h for secondary FDC)
+;	none
 ;-------------------------------------------------------------------------
 fdc_set_rate:
+	push	ax
+	call	get_last_rate		; AH = last transfer rate
 	and	al,fdc_m_rate_bits
+	cmp	al,ah
+	je	.exit			; skip set if the same as previous rate
+	call	set_last_rate		; save the transfer rate
 	rol	al,1
 	rol	al,1
 	mov	dx,fdc_ccr_reg
 	add	dx,[bp+fdc_base]	; get register address for current FDC
 	out	dx,al
+.exit:
+	mov	dx,word [bp+int_13_dx]	; restore DX
+	pop	ax
 	ret
 
 ;=========================================================================
@@ -1566,8 +1543,7 @@ fdc_wait_irq:
 
 .exit:
 	and	byte [bx],~fdc_irq_flag	; clear IRQ flag
-	mov	ah,fdc_e_success
-	clc				; DEBUG - remove after debug
+	xor	ah,ah			; AH = 0, CF = 0 - no error
 	pop	cx
 	ret
 
@@ -1595,8 +1571,7 @@ fdc_wait_irq:
 
 .exit:
 	and	byte [bx],~fdc_irq_flag	; clear IRQ flag
-	mov	ah,fdc_e_success
-	clc				; DEBUG - remove after debug
+	xor	ah,ah			; AH = 0, CF = 0 - no error
 	pop	cx
 	ret
 
