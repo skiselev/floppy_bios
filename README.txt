@@ -137,12 +137,27 @@ Offset 1E34, size 2 bytes:
 Configuration prompt (Press F2...) delay in 55 ms units
 	word - default: 55 (approximately 3 seconds)
 
-Offset 1E36, size 2 bytes:
-Code to run relocated timer (IRQ0) handler. The second byte also used to
-determine what interrupt number the default (INT 08h) handler should be
+Offset 1E36, size 1 byte:
+Flag indicating whenever AT delay subroutines should be used. AT delay
+subroutines provide much more percise timing, but don't work on PC/XT class
+machines.
+	byte - default: 0 - use XT delays; 1 - use AT delays
+
+Offset 1E37, size 3 bytes:
+Code to run relocated timer (IRQ0) handler. The second byte is also used to
+determine what interrupt number the default INT 08h handler should be
 relocated to. This is only used in configurations with two FDCs.
 	byte 0 - default: 0CDh (INT opcode)
 	byte 1 - default: 0AFh (interrupt 0AFh)
+	byte 2 - default: 0CFh (IRET opcode)
+
+Offset 1E3A, size 3 bytes;
+Code to run relocated INT 19h (boot) handler. The second byte is also used to
+determine what interrupt number the default INT 19h handler should be
+relocated to.
+	byte 0 - default: 0CDh (INT opcode)
+	byte 1 - default: 0AEh (interrupt 0AEh)
+	byte 2 - default: 0CFh (IRET opcode)
 
 
 Enabling SDP (Software Data Protection) feature
@@ -176,8 +191,6 @@ won't work on other EEPROMs and will corrupt the EEPROM content instead.
 
 TODO
 ====
-
-- Use port 61h / refersh bit for timing on AT class machines.
 
 - Better check for HDD BIOS presence? (e.g. call INT 13h AH=15h)
 
