@@ -1503,9 +1503,13 @@ fdc_set_rate:
 ;	BX = fdc_calib_state
 ;	AL - trashed
 ;-------------------------------------------------------------------------
-%ifdef AT
-
 fdc_wait_irq:
+    cs	cmp	byte [at_delays],0	; use AT delays?
+	je	fdc_wait_irq_xt
+
+; fdc_wait_irq subroutine for AT
+
+fdc_wait_irq_at:
 	push	cx
 	sti
 	clc
@@ -1548,9 +1552,9 @@ fdc_wait_irq:
 	pop	cx
 	ret
 
-%else	; AT
+; fdc_wait_irq subroutine for XT
 
-fdc_wait_irq:
+fdc_wait_irq_xt:
 	push	cx
 	sti
 	mov	bx,fdc_calib_state	; contains IRQ flag
@@ -1576,8 +1580,6 @@ fdc_wait_irq:
 	pop	cx
 	ret
 
-%endif
-
 ;=========================================================================
 ; fdc_wait_ready - Wait until FDC is ready to receive or send commands
 ;		   but no more than one second
@@ -1590,9 +1592,13 @@ fdc_wait_irq:
 ;	DX - trashed
 ;-------------------------------------------------------------------------
 
-%ifdef AT
-
 fdc_wait_ready:
+    cs	cmp	byte [at_delays],0	; use AT delays?
+	je	fdc_wait_ready_xt
+
+; fdc_wait_ready subroutine for AT
+
+fdc_wait_ready_at:
 	push	cx
 	mov	dx,fdc_status_reg
 	add	dx,[bp+fdc_base]	; get register address for current FDC
@@ -1626,9 +1632,9 @@ fdc_wait_ready:
 	pop	cx
 	ret
 
-%else	; AT
+; fdc_wait_ready subroutine for XT
 
-fdc_wait_ready:
+fdc_wait_ready_xt:
         push    cx
         mov     dx,fdc_status_reg
 	add	dx,[bp+fdc_base]	; get register address for current FDC
@@ -1649,5 +1655,3 @@ fdc_wait_ready:
 .exit:
 	pop	cx
 	ret
-
-%endif	; AT
