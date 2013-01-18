@@ -42,6 +42,7 @@ refresh_flag	equ	10h	; refresh flag, toggles every 15us
 
 vect_int_08	equ	(08h*4)
 vect_int_13	equ	(13h*4)
+vect_int_19	equ	(19h*4)
 vect_int_1E	equ	(1Eh*4)
 vect_int_40	equ	(40h*4)
 
@@ -119,55 +120,6 @@ init:
 	pop	es
 
 ;-------------------------------------------------------------------------
-; prompt for the configuration utility
-
-	mov	si,msg_config
-	call	print
-	sti				; enable interrupts (so keyboard works)
-    cs	mov	cx,word [config_delay]
-
-.config_loop:
-	mov	ah,01h
-	int	16h
-	jz	.config_no_key
-	mov	ah,00h
-	int	16h			; read the keystroke
-	cmp	al,1Bh			; ESC?
-	je	.config_esc
-	cmp	ax,3C00h		; F2?
-	jne	.config_no_key
-	mov	si,msg_crlf
-	call	print
-	call	config_util		; F2 pressed, run the configuration
-
-	jc	.config_done		; configuration didn't change
-
-	push	es			; configuration had changed, print
-	mov	bx,cs
-	mov	es,bx
-	mov	bx,drive_config
-	call	print_config		; print floppy drive types
-	pop	es
-
-	jmp	.config_done
-
-.config_no_key:
-
-; this code waits approximately 18.2 ms
-	mov	dx,word [ticks_lo]
-
-.wait:
-	cmp	dx,word [ticks_lo]
-	je	.wait
-	loop	.config_loop
-
-.config_esc:
-	mov	si,msg_crlf
-	call	print
-
-.config_done:
-
-;-------------------------------------------------------------------------
 ; set equipment bits
 
 set_equipment:
@@ -177,15 +129,16 @@ set_equipment:
 	call	get_drive_type
 	jc	.count_drives_done	; no floppy drive
 	inc	dl
-	cmp	dl,4
+	cmp	dl,4			; 4 drives at most in the equipment var
 	jb	.count_drives_loop	; repeat for the next drive number
 
 .count_drives_done:
+	cmp	dl,0
+	jz	no_drives_installed	; no floppies configured
+
 	mov	al,byte [equipment_list]
 					; set all floppy bits to 0
 	and	al,~(equip_floppies|equip_floppy_num)
-	cmp	dl,0
-	jz	.exit			; no floppies configured
 	
 	or	al,equip_floppies	; at least one floppy
 	dec	dl
@@ -193,7 +146,6 @@ set_equipment:
 	shl	dl,cl
 	or	al,dl			; set number of floppies
 
-.exit:
 	mov	byte [equipment_list],al
 
 ;-------------------------------------------------------------------------
@@ -327,6 +279,23 @@ set_interrupts:
 	sti
 	call	print
 
+set_int19_isr:
+
+; relocate INT 19h (boot) interrupt vector
+
+    cs	mov	bl,byte [int_19_relocate] ; interrupt number for INT 19
+					; relocation
+	mov	bh,0
+	shl	bx,1			; each interrupt vector takes 4 bytes
+	shl	bx,1			; multiply by 4
+	mov	si,word [vect_int_19]	; get INT 19h offset
+	mov	word [bx],si		; store it to the relocated interrupt
+	mov	si,word [vect_int_19+2]	; get INT 19h segment
+	mov	word [bx+2],si		; store it to the relocated interrupt
+
+	mov	word [vect_int_08],int_19
+	mov	word [vect_int_08+2],cs
+
 ;-------------------------------------------------------------------------
 ; end of initialization code
 
@@ -337,6 +306,83 @@ set_interrupts:
 	pop	bx
 	pop	ax
 	retf
+
+;-------------------------------------------------------------------------
+; no drives - print the message, install INT 19h handler anyway
+
+no_drives_installed:
+	mov	si,msg_no_drives
+	call	print
+
+	xor	ax,ax
+	mov	ds,ax			; set DS to the interrupt table
+	jmp	set_int19_isr
+
+;-------------------------------------------------------------------------
+; prompt for the configuration utility
+
+int_19:
+	push	ax
+	push	bx
+	push	cx
+	push	si
+	push	ds
+
+	mov	ax,biosdseg
+	mov	ds,ax			; set DS to the BIOS data area
+
+	mov	si,msg_config
+	call	print
+	sti				; enable interrupts (so keyboard works)
+    cs	mov	cx,word [config_delay]
+
+.config_loop:
+	mov	ah,01h
+	int	16h
+	jz	.config_no_key
+	mov	ah,00h
+	int	16h			; read the keystroke
+	cmp	al,1Bh			; ESC?
+	je	.config_esc
+	cmp	ax,3C00h		; F2?
+	jne	.config_no_key
+	mov	si,msg_crlf
+	call	print
+	call	config_util		; F2 pressed, run the configuration
+
+	jc	.config_done		; configuration didn't change
+
+	mov	si,msg_reboot
+	call	print
+
+	mov	ah,00h
+	int	16h			; wait for a keystroke
+
+	cli
+
+	jmp	0FFFFh:0000h		; reboot the machine
+
+.config_no_key:
+
+; this code waits approximately 18.2 ms
+	mov	dx,word [ticks_lo]
+
+.wait:
+	cmp	dx,word [ticks_lo]
+	je	.wait
+	loop	.config_loop
+
+.config_esc:
+	mov	si,msg_crlf
+	call	print
+
+.config_done:
+	pop	ds
+	pop	si
+	pop	cx
+	pop	bx
+	pop	ax
+	jmp	orig_int_19
 
 ;=========================================================================
 ; config_util - Floppy BIOS EEPROM configuration utility
@@ -476,6 +522,14 @@ config_util:
 	jc	.write_failed
 	mov	si,msg_cfg_saved
 	call	print
+
+	push	es			; configuration had changed, print
+	mov	bx,cs
+	mov	es,bx
+	mov	bx,drive_config
+	call	print_config		; print floppy drive types
+	pop	es
+
 	clc				; configuration changed
 	jmp	.exit
 
@@ -1774,6 +1828,13 @@ orig_timer_isr:
 		db	0CDh		; INT opcode
 timer_relocate	db	0AFh		; relocated timer (IRQ8) vector
 		iret
+
+; call the original INT 19h
+orig_int_19:
+		db	0CDh		; INT opcode
+int_19_relocate	db	0AEh		; relocated INT 19h vector
+		iret			; int 19h shouldn't ever return
+					; but who knows...
 
 config_size	equ	($-config)
 
