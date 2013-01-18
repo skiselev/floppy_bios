@@ -1012,8 +1012,7 @@ get_media_state:
 	push	si
 	push	ds
     cs	lds	si,[fdc_media_state_addr]
-	add	si,bx
-	mov	bl,byte [si]
+	mov	bl,byte [si+bx]
 	pop	ds
 	pop	si
 	ret
@@ -1040,8 +1039,7 @@ set_media_state:
 	push	si
 	push	ds
     cs	lds	si,[fdc_media_state_addr] ; DS:SI = address of media state area
-	add	si,bx
-	mov	byte [si],al
+	mov	byte [si+bx],al
 	pop	ds
 	pop	si
 
@@ -1077,8 +1075,7 @@ check_cylinder:
 	push	si
 	push	ds
     cs	lds	si,[fdc_cylinder_addr]	; DS:SI = address of cylinder area
-	add	si,bx
-	cmp	byte [si],ch
+	cmp	byte [si+bx],ch
 	pop	ds
 	pop	si
 
@@ -1114,8 +1111,7 @@ set_cylinder:
 	push	si
 	push	ds
     cs	lds	si,[fdc_cylinder_addr]	; DS:SI = address of cylinder area
-	add	si,bx
-	mov	byte [si],ch
+	mov	byte [si+bx],ch
 	pop	ds
 	pop	si
 
