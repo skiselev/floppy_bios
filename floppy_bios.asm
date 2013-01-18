@@ -120,8 +120,10 @@ init:
 
 ;-------------------------------------------------------------------------
 ; prompt for the configuration utility
+
 	mov	si,msg_config
 	call	print
+	sti				; enable interrupts (so keyboard works)
     cs	mov	cx,word [config_delay]
 
 .config_loop:
@@ -1418,8 +1420,13 @@ print_config:
 ;	    timer channel 1. Will not function properly if timer gets
 ;	    reprogrammed by an application or if it was not initialized yet
 ;-------------------------------------------------------------------------
-%ifdef	AT
 delay_15us:
+    cs	cmp	byte [at_delays],0	; use AT delays?
+	je	delay_15us_xt
+
+; delay subroutine for AT
+
+delay_15us_at:
 	push	ax
 	push	cx
 .zero:
@@ -1438,8 +1445,10 @@ delay_15us:
 	pop	cx
 	pop	ax
 	ret
-%else
-delay_15us:
+
+; delay subroutine for XT
+
+delay_15us_xt:
 	push	ax
 	push	cx
 .1:
@@ -1451,7 +1460,6 @@ delay_15us:
 	pop	cx
 	pop	ax
 	ret
-%endif	; AT
 
 ;=========================================================================
 ; print - print ASCIIZ string to the console
@@ -1756,6 +1764,10 @@ fdc_motor_state_addr:
 
 ; configuration prompt delay in 55 ms units
 config_delay	dw	55		; approximately 3 seconds
+
+; use port 61h, bit 4 (refresh bit) for delays
+at_delays	db	0		; don't use by default
+
 
 ; call the original timer interrupt service routine
 orig_timer_isr:
