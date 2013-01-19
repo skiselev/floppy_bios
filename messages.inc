@@ -44,8 +44,9 @@ msg_floppy_1200	db	'1.2 MB, 5.25"', 00h
 msg_floppy_720	db	'720 KB,  3.5"', 00h
 msg_floppy_1440	db	'1.44 MB, 3.5"', 00h
 msg_floppy_2880	db	'2.88 MB, 3.5"', 00h
-msg_int13	db	'Extension BIOS installed on INT 13', 0Dh, 0Ah, 00h
-msg_int40	db	'Extension BIOS installed on INT 40', 0Dh, 0Ah, 00h
+msg_no_drives	db	'No floppy drives configured, BIOS extension is not installed', 0Dh, 0Ah, 00h
+msg_int13	db	'BIOS extension is installed on INT 13', 0Dh, 0Ah, 00h
+msg_int40	db	'BIOS extension is installed on INT 40', 0Dh, 0Ah, 00h
 tbl_floppy	dw	msg_floppy_none
 		dw	msg_floppy_360
 		dw	msg_floppy_1200
@@ -54,7 +55,7 @@ tbl_floppy	dw	msg_floppy_none
 		dw	msg_floppy_none
 		dw	msg_floppy_2880
 		dw	msg_floppy_none
-msg_config	db	'Press F2 to run the configuration utility...', 00h
+msg_config	db	'Press F2 to run the Multi-Floppy BIOS configuration utility...', 00h
 msg_cfg_welcome	db	'Welcome to the Multi-Floppy BIOS configuration utility.', 00h
 msg_cfg_help	db	0Dh, 0Ah, 'Multi-Floppy BIOS configuration help:', 0Dh, 0Ah
 		db	'a - Add a floppy drive', 0Dh, 0Ah
@@ -76,8 +77,7 @@ msg_cfg_fdc_del	db	0Dh, 0Ah, 'Warning: Disabling secondary FDC will delete all d
 msg_cfg_fdc_alr	db	0Dh, 0Ah, 'Error: The secondary FDC is already disabled.', 00h
 msg_cfg_save	db	0Dh, 0Ah, 'Saving the configuration to the EEPROM. '
 		db	'Please do not reboot the computer.', 0Dh, 0Ah, 00h
-msg_cfg_saved	db	0Dh, 0Ah, 'Configuration saved successfully'
-msg_dot_crlf	db	'.', 0Dh, 0Ah, 00h
+msg_cfg_saved	db	0Dh, 0Ah, 'Configuration saved successfully. The new configuration is:', 0Dh, 0Ah, 00h
 msg_cfg_failed	db	0Dh, 0Ah, 'Failed to write to the EEPROM. '
 		db	'Make sure EEPROM write protection is disabled.', 0Dh, 0Ah
 		db	'Configuration data dump:', 00h
