@@ -69,6 +69,7 @@ fdc_motor_state	equ	3Fh	; byte - floppy drive motor status
 fdc_motor_tout	equ	40h	; byte - floppy drive motor off timeout (ticks)
 fdc_last_error	equ	41h	; byte - status of last diskette operation
 fdc_ctrl_status	equ	42h	; byte[7] - FDC status bytes
+warm_boot	equ	72h	; word - Warm boot if equals 1234h
 ticks_lo	equ	6Ch	; word - timer ticks - low word
 fdc_last_rate	equ	8Bh	; byte - last data rate / step rate
 fdc_info	equ	8Fh	; byte - floppy dist drive information
@@ -80,6 +81,14 @@ fdc_cylinder	equ	94h	; byte[2] - current cylinder (drives 0 - 1)
 temp_segment	equ	07C0h
 eeprom_write	equ	0	; EEPROM write routine
 temp_config	equ	100h	; configuration storage for configuration
+
+;-------------------------------------------------------------------------
+; configuration flags
+use_at_delays	equ	01h	; Use AT delays (port 61h, bit 4)
+config_on_init	equ	02h	; Display configuration prompt on initialization
+config_on_boot	equ	04h	; Display configuration prompt on boot
+equip_on_init	equ	08h	; Update equipment on initialization
+equip_on_boot	equ	10h	; Update equipment on boot
 
 ;=========================================================================
 ; Extension BIOS ROM header
@@ -120,33 +129,38 @@ init:
 	pop	es
 
 ;-------------------------------------------------------------------------
-; set equipment bits
+; run configuration utility and update equipment if needed
 
-set_equipment:
-	mov	dl,0			; first floppy drive to check
+    cs	test	byte [config_flags],config_on_init
+	jz	.1
 
-.count_drives_loop:
+	call	config_prompt
+	jnc	.update_equipment	; configuration changed, update
+
+.1:
+    cs	test	byte [config_flags],equip_on_init
+	jz	.2
+
+.update_equipment:
+	call	set_equipment
+
+.2:
+
+;-------------------------------------------------------------------------
+; check if at least one drive is configured
+
+	mov	dl,0
 	call	get_drive_type
-	jc	.count_drives_done	; no floppy drive
-	inc	dl
-	cmp	dl,4			; 4 drives at most in the equipment var
-	jb	.count_drives_loop	; repeat for the next drive number
+	jnc	.drives_installed
 
-.count_drives_done:
-	cmp	dl,0
-	jz	no_drives_installed	; no floppies configured
+	mov	si,msg_no_drives
+	call	print
 
-	mov	al,byte [equipment_list]
-					; set all floppy bits to 0
-	and	al,~(equip_floppies|equip_floppy_num)
-	
-	or	al,equip_floppies	; at least one floppy
-	dec	dl
-	mov	cl,6			; position in equipment word
-	shl	dl,cl
-	or	al,dl			; set number of floppies
+	xor	ax,ax
+	mov	ds,ax			; set DS to the interrupt table
+	jmp	set_int19_isr
 
-	mov	byte [equipment_list],al
+.drives_installed:
 
 ;-------------------------------------------------------------------------
 ; clear the data areas
@@ -283,6 +297,9 @@ set_int19_isr:
 
 ; relocate INT 19h (boot) interrupt vector
 
+    cs	test	byte [config_flags],(config_on_boot | equip_on_boot)
+	jz	.skip_int19		; nothing to do on boot, don't set
+
     cs	mov	bl,byte [int_19_relocate] ; interrupt number for INT 19
 					; relocation
 	mov	bh,0
@@ -293,8 +310,10 @@ set_int19_isr:
 	mov	si,word [vect_int_19+2]	; get INT 19h segment
 	mov	word [bx+2],si		; store it to the relocated interrupt
 
-	mov	word [vect_int_08],int_19
-	mov	word [vect_int_08+2],cs
+	mov	word [vect_int_19],int_19
+	mov	word [vect_int_19+2],cs
+
+.skip_int19:
 
 ;-------------------------------------------------------------------------
 ; end of initialization code
@@ -308,29 +327,53 @@ set_int19_isr:
 	retf
 
 ;-------------------------------------------------------------------------
-; no drives - print the message, install INT 19h handler anyway
-
-no_drives_installed:
-	mov	si,msg_no_drives
-	call	print
-
-	xor	ax,ax
-	mov	ds,ax			; set DS to the interrupt table
-	jmp	set_int19_isr
-
-;-------------------------------------------------------------------------
 ; prompt for the configuration utility
 
 int_19:
 	push	ax
 	push	bx
 	push	cx
+	push	dx
 	push	si
 	push	ds
 
 	mov	ax,biosdseg
 	mov	ds,ax			; set DS to the BIOS data area
 
+    cs	test	byte [config_flags],config_on_boot
+	jz	.1
+
+	call	config_prompt
+	jnc	.update_equipment	; configuration changed, update
+
+.1:
+    cs	test	byte [config_flags],equip_on_boot
+	jz	.2
+
+.update_equipment:
+	call	set_equipment
+
+.2:
+	pop	ds
+	pop	si
+	pop	dx
+	pop	cx
+	pop	bx
+	pop	ax
+	jmp	orig_int_19
+
+;=========================================================================
+; config_prompt - display configuration prompt, run configuration utility
+; Input:
+;	none
+; Output:
+;	CF = 0 - configuration changed
+;	CF = 1 - configuration not changed
+; 	trashes registers
+; Note:
+;	DS should be set to 0040h (BIOS data area)
+;-------------------------------------------------------------------------
+config_prompt:
 	mov	si,msg_config
 	call	print
 	sti				; enable interrupts (so keyboard works)
@@ -349,18 +392,7 @@ int_19:
 	mov	si,msg_crlf
 	call	print
 	call	config_util		; F2 pressed, run the configuration
-
-	jc	.config_done		; configuration didn't change
-
-	mov	si,msg_reboot
-	call	print
-
-	mov	ah,00h
-	int	16h			; wait for a keystroke
-
-	cli
-
-	jmp	0FFFFh:0000h		; reboot the machine
+	ret				; CF = 0 if configuration changed
 
 .config_no_key:
 
@@ -377,12 +409,54 @@ int_19:
 	call	print
 
 .config_done:
-	pop	ds
-	pop	si
-	pop	cx
-	pop	bx
-	pop	ax
-	jmp	orig_int_19
+	stc				; configuration didn't change
+	ret
+
+;=========================================================================
+; set_equipment - set floppy configuration in BIOS equipment word
+; Input:
+;	none (scans configuration area)
+; Output:
+;	CF = 0 - equipment updated, at least one drive configured
+;	CF = 1 - equipment not updated, no drives configured
+;	AX, CX, DX - trashed
+; Note:
+;	DS should be set to 0040h (BIOS data area)
+;-------------------------------------------------------------------------
+; set equipment bits
+
+set_equipment:
+	mov	dl,0			; first floppy drive to check
+
+.count_drives_loop:
+	call	get_drive_type
+	jc	.count_drives_done	; no floppy drive
+	inc	dl
+	cmp	dl,4			; 4 drives at most in the equipment var
+	jb	.count_drives_loop	; repeat for the next drive number
+
+.count_drives_done:
+	cmp	dl,0
+	jz	.count_no_drives	; no floppies configured
+
+	mov	al,byte [equipment_list]
+					; set all floppy bits to 0
+	and	al,~(equip_floppies|equip_floppy_num)
+	
+	or	al,equip_floppies	; at least one floppy
+	dec	dl
+	mov	cl,6			; position in equipment word
+	shl	dl,cl
+	or	al,dl			; set number of floppies
+
+	mov	byte [equipment_list],al
+;	clc				; Optimization:
+					; CF = 0 set by "or al,dl"
+	ret
+
+.count_no_drives:
+	stc
+	ret
 
 ;=========================================================================
 ; config_util - Floppy BIOS EEPROM configuration utility
@@ -1471,8 +1545,8 @@ print_config:
 ;	    reprogrammed by an application or if it was not initialized yet
 ;-------------------------------------------------------------------------
 delay_15us:
-    cs	cmp	byte [at_delays],0	; use AT delays?
-	je	delay_15us_xt
+    cs	test	byte [config_flags],use_at_delays ; use AT delays?
+	jz	delay_15us_xt
 
 ; delay subroutine for AT
 
@@ -1815,9 +1889,8 @@ fdc_motor_state_addr:
 ; configuration prompt delay in 55 ms units
 config_delay	dw	55		; approximately 3 seconds
 
-; use port 61h, bit 4 (refresh bit) for delays
-at_delays	db	0		; don't use by default
-
+; configuration flags
+config_flags	db	(config_on_boot | equip_on_init | equip_on_boot)
 
 ; call the original timer interrupt service routine
 orig_timer_isr:
