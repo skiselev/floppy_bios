@@ -249,7 +249,10 @@ int_13_fn04:
 	je	.set_media_720		; set media type for 720K drive
 
 	call	fdc_disk_change
-	jc	.error_end_io		; jump if disk change check failed
+	cmp	ah,fdc_e_changed
+	je	.establish_media	; disk changed - establish media
+	cmp	ah,fdc_e_success
+	jne	.error_end_io		; fdc_disk_change failed
 
 	test	bl,fdc_m_established
 	jz	.establish_media	; jump if media type is not established
