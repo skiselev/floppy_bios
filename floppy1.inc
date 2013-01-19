@@ -898,7 +898,6 @@ fdc_end_io:
 ;	CF set if disk changed or on error
 ;		AH = 06h - disk changed
 ;		AH = error code
-;	DX - trashed
 ; Note:
 ;	Motor needs to be turned on before calling this function
 ;------------------------------------------------------------------------
@@ -916,7 +915,7 @@ fdc_disk_change:
 	and	al,fdc_m_state_bits
 	jz	.exit			; jump if 360K drive (no change line)
 	cmp	al,3
-	je	.exit			; jump if 360K dirve (no change line)
+	je	.exit			; jump if 360K drive (no change line)
 	mov	dx,fdc_dir_reg
 	add	dx,[bp+fdc_base]	; get register address for current FDC
 	in	al,dx			; read disk change line
@@ -1504,8 +1503,8 @@ fdc_set_rate:
 ;	AL - trashed
 ;-------------------------------------------------------------------------
 fdc_wait_irq:
-    cs	cmp	byte [at_delays],0	; use AT delays?
-	je	fdc_wait_irq_xt
+    cs	test	byte [config_flags],use_at_delays ; use AT delays?
+	jz	fdc_wait_irq_xt
 
 ; fdc_wait_irq subroutine for AT
 
@@ -1593,8 +1592,8 @@ fdc_wait_irq_xt:
 ;-------------------------------------------------------------------------
 
 fdc_wait_ready:
-    cs	cmp	byte [at_delays],0	; use AT delays?
-	je	fdc_wait_ready_xt
+    cs	test	byte [config_flags],use_at_delays ; use AT delays?
+	jz	fdc_wait_ready_xt
 
 ; fdc_wait_ready subroutine for AT
 
