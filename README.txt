@@ -138,11 +138,19 @@ Configuration prompt (Press F2...) delay in 55 ms units
 	word - default: 55 (approximately 3 seconds)
 
 Offset 1E36, size 1 byte:
-Flag indicating whenever AT delay subroutines should be used. AT delay
-subroutines provide much more percise timing, but don't work on PC/XT class
-machines.
-	byte - default: 0 - use XT delays; 1 - use AT delays
-
+Configuration flags
+	bit 0 - Use port 61h / bit 4 for delays (implemented on AT and Xi 8088)
+		default: 0 - Don't use port 61; for PC/XT class machines.
+	bit 1 - Display configuration prompt during extension ROM initialization
+		default: 0 - Don't display
+	bit 2 - Display configuration prompt on boot (INT 19h)
+		default: 0 - Display
+	bit 3 - Update BIOS equipment word during extension ROM initialization
+		default: 1 - Update
+	bit 4 - Update BIOS equipment word on boot (INT 19h)
+		default: 1 - Update
+	bits 5 - 7 - Reserved, set to 0
+		
 Offset 1E37, size 3 bytes:
 Code to run relocated timer (IRQ0) handler. The second byte is also used to
 determine what interrupt number the default INT 08h handler should be
