@@ -94,11 +94,16 @@ Configuration Data Structure
 ----------------------------
 
 The configuration data is stored in the extension BIOS ROM starting from
-offset 1E00h.
+offset 1F80h.
 
 Here is the location and the purpose of the configuration data:
 
-Offset 1E00h, size 32 bytes:
+Offset 1F80h, size 1 bytes:
+Checksum correction byte. Value of this byte is negative of the sum of the
+rest of bytes in 1F81h - 1FFFh range, so that the sum of the 1F80h - 1FFFh
+range equals zero.
+
+Offset 1F81h, size 32 bytes:
 Floppy drive configuration, 8 entries, 4 bytes each:
 	byte 0 - drive type:
 		0 - drive not present
@@ -117,7 +122,7 @@ Notes:
   twist is the physical drive 0, and the drive before the twist is the physical
   drive 1.
 
-Offset 1E20h, size 8 bytes:
+Offset 1FA1h, size 8 bytes:
 FDC configuration, 2 entries (primary FDC and secondary FDC), 4 bytes each:
 	word 0 - FDC base address.
 		Normally 3F0h for the primary FDC and 370h for the secondary FDC
@@ -126,26 +131,26 @@ FDC configuration, 2 entries (primary FDC and secondary FDC), 4 bytes each:
 	byte 3 - FDC DMA channel number.
 		Normally 2 for the primary FDC
 
-Offset 1E28h, size 4 bytes:
+Offset 1FA9h, size 4 bytes:
 Pointer to floppy drive media state for drives 4-7 variables array.
 	word 0 - offset; default: 02C0h
 	word 2 - segment; default; 0000h
 
-Offset 1E2Ch, size 4 bytes:
+Offset 1FADh, size 4 bytes:
 Pointer to current cylinder for drives 2-7 variables array:
 	word 0 - offset; default: 02C4h
 	word 2 - segment; default: 0000h
 
-Offset 1E30h, size 4 bytes:
+Offset 1FB1h, size 4 bytes:
 Pointer to mode, motor state, and selected drive for the secondary FDC variable:
 	word 0 - offset; default: 02CAh
 	word 2 - segment; default: 0000h
 
-Offset 1E34, size 2 bytes:
+Offset 1FB5, size 2 bytes:
 Configuration prompt (Press F2...) delay in 55 ms units
 	word - default: 55 (approximately 3 seconds)
 
-Offset 1E36, size 1 byte:
+Offset 1FB7, size 1 byte:
 Configuration flags
 	bit 0 - Use port 61h / bit 4 for delays (implemented on AT and Xi 8088)
 		default: 0 - Don't use port 61; for PC/XT class machines.
@@ -159,7 +164,7 @@ Configuration flags
 		default: 1 - Update
 	bits 5 - 7 - Reserved, set to 0
 		
-Offset 1E37, size 3 bytes:
+Offset 1FB8, size 3 bytes:
 Code to run relocated timer (IRQ0) handler. The second byte is also used to
 determine what interrupt number the default INT 08h handler should be
 relocated to. This is only used in configurations with two FDCs.
@@ -167,7 +172,7 @@ relocated to. This is only used in configurations with two FDCs.
 	byte 1 - default: 0AFh (interrupt 0AFh)
 	byte 2 - default: 0CFh (IRET opcode)
 
-Offset 1E3A, size 3 bytes;
+Offset 1FBB, size 3 bytes;
 Code to run relocated INT 19h (boot) handler. The second byte is also used to
 determine what interrupt number the default INT 19h handler should be
 relocated to.
