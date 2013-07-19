@@ -33,6 +33,14 @@ IRQ 6.
 Release Notes
 =============
 
+Version 2.2
+-----------
+- Fix garbage output on CGA displays with IBM BIOS
+- Make BIOS extension code size equal 8 KiB, including the configuration area.
+  This mitigates issues with original IBM BIOS and XT BIOS by Anonymous, that
+  expect BIOS extension size to be a multiply of 2 KiB.
+- Reinstall interrupt vectors on INT 19h.
+
 Version 2.0
 -----------
 
