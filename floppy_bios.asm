@@ -89,13 +89,14 @@ config_on_init	equ	02h	; Display configuration prompt on initialization
 config_on_boot	equ	04h	; Display configuration prompt on boot
 equip_on_init	equ	08h	; Update equipment on initialization
 equip_on_boot	equ	10h	; Update equipment on boot
+builtin_ipl	equ	20h	; Use built-in IPL functionality
 
 ;=========================================================================
 ; Extension BIOS ROM header
 ;-------------------------------------------------------------------------
 signature	dw	0AA55h	; Extension ROM signature
 				; ROM size in 512 byte blocks
-rom_size	db	0Fh	; 8 KiB - 512 bytes (for configuration)
+rom_size	db	10h	; 8 KiB in 512 bytes blocks
 init_entry	jmp	init
 
 ;=========================================================================
@@ -297,7 +298,7 @@ set_int19_isr:
 
 ; relocate INT 19h (boot) interrupt vector
 
-    cs	test	byte [config_flags],(config_on_boot | equip_on_boot)
+    cs	test	byte [config_flags],(config_on_boot | equip_on_boot | builtin_ipl)
 	jz	.skip_int19		; nothing to do on boot, don't set
 
     cs	mov	bl,byte [int_19_relocate] ; interrupt number for INT 19
@@ -337,6 +338,12 @@ int_19:
 	push	si
 	push	ds
 
+	xor	ax,ax
+	mov	ds,ax
+
+	mov	word [vect_int_1E],int_1E	; fix diskette parameter
+	mov	word [vect_int_1E+2],cs		; table vector
+
 	mov	ax,biosdseg
 	mov	ds,ax			; set DS to the BIOS data area
 
@@ -354,6 +361,12 @@ int_19:
 	call	set_equipment
 
 .2:
+
+    cs	test	byte [config_flags],builtin_ipl
+	jz	.3
+	call	ipl
+
+.3:
 	pop	ds
 	pop	si
 	pop	dx
@@ -361,6 +374,59 @@ int_19:
 	pop	bx
 	pop	ax
 	jmp	orig_int_19
+
+;=========================================================================
+; ipl - Initial Program Load - try to read and execute boot sector
+;-------------------------------------------------------------------------
+ipl:
+	sti
+	xor	ax,ax
+	mov	ds,ax
+	mov	word [78h],int_1E
+	mov	word [7Ah],cs
+
+.retry:
+	mov	cx,4			; try booting from floppy 4 times
+
+.fd_loop:
+	push	cx
+	mov	ah,00h			; reset disk system
+	mov	dl,00h			; drive 0
+	int	13h
+	jb	.fd_failed
+	mov	ah,08h			; get drive parameters
+	mov	dl,00h			; drive 0
+	int	13h
+	jc	.fd_failed
+	cmp	dl,00h
+	jz	.fd_failed		; jump if zero drives
+	mov	ax,0201h		; read one sector
+	xor	dx,dx			; head 0, drive 0
+	mov	es,dx			; to 0000:7C00
+	mov	bx,7C00h
+	mov	cx,0001h		; track 0, sector 1
+	int	13h
+	jc	.fd_failed
+    es	cmp	word [7DFEh],0AA55h
+	jnz	.fd_failed
+	jmp	0000h:7C00h
+
+.fd_failed:
+	pop	cx
+	loop	.fd_loop
+
+	mov	si,msg_boot_failed
+	call	print
+	mov	al,ah
+	call	print_hex_byte
+	mov	si,msg_boot_retry
+	call	print
+	mov	ah,00h
+	int	16h
+	or	al,20h			; convert letters to the lower case
+	cmp	al,'f'
+	jne	.retry
+	ret
 
 ;=========================================================================
 ; config_prompt - display configuration prompt, run configuration utility
@@ -485,7 +551,7 @@ config_util:
 	cld
     rep	movsb				; copy the eeprom_write code
 
-	mov	si,drive_config
+	mov	si,config
 	mov	di,temp_config
 	mov	cx,config_size		; number of configuration bytes
 	cld
@@ -554,7 +620,7 @@ config_util:
 .print_cfg:
 	mov	si,msg_crlf
 	call	print
-	mov	bx,temp_config
+	mov	bx,temp_config+(drive_config-config)
 	call	print_config		; print the current configuration
 	jmp	.cfg_loop
 
@@ -581,6 +647,23 @@ config_util:
 .write_cfg:
 	mov	si,msg_cfg_save
 	call	print
+
+; fix checksum
+
+	mov	cx,config_size
+	dec	cx			; config_size minus checksum byte
+	mov	bx,temp_config+1	; config area, skip checksum byte
+	mov	al,0
+
+.calculate_chksum:
+	add	al,byte [bx]
+	inc	bx
+	loop	.calculate_chksum
+	neg	al
+	mov	[temp_config+(config_sum_byte-config)],al
+
+; call eeprom_write
+
 	push	ds
 	push	es
 	mov	cx,config_size		; number of bytes to write
@@ -589,7 +672,7 @@ config_util:
 	mov	ax,cs
 	mov	es,ax			; ES = destination segment
 	mov	si,temp_config		; SI = source offset
-	mov	di,drive_config		; DI = destination offset
+	mov	di,config		; DI = destination offset
 	call	temp_segment:eeprom_write
 	pop	es
 	pop	ds
@@ -1600,13 +1683,13 @@ print:
 	push	ds
 	push	cs
 	pop	ds
-	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
-	mov	bx,0007h		; page number + color (for graphic mode)
 	cld
 .1:
 	lodsb
 	or	al,al
 	jz	.exit
+	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
+	mov	bx,0007h		; page number + color (for graphic mode)
 	int	10h
 	jmp	.1
 .exit:
@@ -1833,17 +1916,24 @@ eeprom_write_size	equ	($-eeprom_write_code)
 ; checksum correction byte - changed by fix_checksum so that
 ; the checksum of the code portion of the BIOS extension ROM equals 0
 ;-------------------------------------------------------------------------
-	setloc	1DFFh
+	setloc	1F7Fh
 
-correction_byte	db	0	; checksum correction byte
+code_sum_byte	db	0	; code checksum correction byte
 
 ;=========================================================================
 ; configuration space
 ;-------------------------------------------------------------------------
-	setloc	1E00h			; Configuration is at the last 512
+	setloc	1F80h			; Configuration is at the last 128
 					; bytes of the 8 KiB ROM
 
 config:
+
+;-------------------------------------------------------------------------
+; configuration checksum correction byte - changed by fix_checksum and
+; configruation utility so that the checksum of the configuration portion
+; of the BIOS extension ROM equals 0
+config_sum_byte	db	0	; config checksum correction byte
+
 ;-------------------------------------------------------------------------
 ; floppy drives configuration - 8 entries of 4 bytes each.
 ; Entry format: <CMOS drive type>, <FDC number>, <physical drive number>, 00
@@ -1890,7 +1980,7 @@ fdc_motor_state_addr:
 config_delay	dw	55		; approximately 3 seconds
 
 ; configuration flags
-config_flags	db	(config_on_boot | equip_on_init | equip_on_boot)
+config_flags	db	(config_on_boot | equip_on_init | equip_on_boot | builtin_ipl)
 
 ; call the original timer interrupt service routine
 orig_timer_isr:
