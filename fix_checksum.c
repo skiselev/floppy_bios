@@ -31,23 +31,25 @@ int main(int argc, char *argv[])
 {
 	struct stat *st;
 	char *rom_buf;
-	int file_size, rom_size, i, in, out, correction_byte;
+	int file_size, rom_size, area, area_start, area_end, area_sum, i, in, out;
 	unsigned char checksum;
 
-	if (argc != 4) {
-		fprintf(stderr, "Usage: %s <hex_address> <input_file> <output_file>\n\n", argv[0]);
-		fprintf(stderr, "<hex_address> - Hexadecimal address of the byte to be changed to\n");
-		fprintf(stderr, "                correct the checksum (e.g 1FFF).\n");
+	if (argc < 6 || argc % 3 != 0) {
+		fprintf(stderr, "Usage: %s <input_file> <output_file>\n",argv[0]);
+		fprintf(stderr, "          <area1_start> <area1_end> <area1_sumaddr>\n");
+		fprintf(stderr, "          [<area2_start> <area2_end> <area2_sumaddr>] ..\n\n");
 		fprintf(stderr, "<input_file>  - File name of the input image file.\n");
 		fprintf(stderr, "<output_file> - File name of the output image file.\n");
+		fprintf(stderr, "<areaX_start> - Hexadecimal start address of a ROM area X\n");
+		fprintf(stderr, "<areaX_end>   - Hexadecimal end address of a ROM area X\n");
+		fprintf(stderr, "<areaX_sum>   - Hexadecimal address of the byte to be changed to\n");
+		fprintf(stderr, "                correct the checksum for area X.\n");
 		exit(1);
 	}
 
-	sscanf(argv[1], "%x", &correction_byte);
-
 	st = malloc(sizeof(struct stat));
 	
-	if (stat(argv[2], st) == -1) {
+	if (stat(argv[1], st) == -1) {
 		fprintf(stderr, "Failed to stat '%s'\n", argv[1]);
 		exit(2);
 	}
@@ -63,7 +65,7 @@ int main(int argc, char *argv[])
 
 	rom_buf = malloc(file_size);
 
-	if ((in = open(argv[2], O_RDONLY)) == -1) {
+	if ((in = open(argv[1], O_RDONLY)) == -1) {
 		fprintf(stderr, "Failed to open '%s'\n", argv[1]);
 		exit(2);
 	}
@@ -84,21 +86,38 @@ int main(int argc, char *argv[])
 		exit(2);
 	}
 
-	checksum = 0;
-	for (i = 0; i < rom_size; i++) {
-		if (i != correction_byte) checksum += rom_buf[i];
+	for (area = 1; area < argc / 3; area++) {
+
+		sscanf(argv[area*3], "%x", &area_start);
+		sscanf(argv[area*3+1], "%x", &area_end);
+		sscanf(argv[area*3+2], "%x", &area_sum);
+
+		if (area_start > area_end) {
+			fprintf(stderr, "Area %d start address %04X is bigger than end address %04X\n", area, area_start, area_end);
+			exit(1);
+		}
+
+		if (area_sum < area_start || area_sum > area_end) {
+			fprintf(stderr, "Area %d checksum address %04X is not within the area %04X - %04X\n", area, area_sum, area_start, area_end);
+			exit(1);
+		}
+
+		checksum = 0;
+		for (i = area_start; i <= area_end; i++) {
+			if (i != area_sum) checksum += rom_buf[i];
+		}
+
+		printf("DEBUG: Area %d: Original checksum: 0x%02X\n", area, checksum);
+
+		rom_buf[area_sum] = -checksum;
+
+		checksum = 0;
+		for (i = area_start; i <= area_end; i++) checksum += rom_buf[i];
+
+		printf("DEBUG: Area %d: Fixed checksum: 0x%02X\n", area, checksum);
 	}
 
-	printf("DEBUG: Original checksum: 0x%02X\n", checksum);
-
-	rom_buf[correction_byte] = -checksum;
-
-	checksum = 0;
-	for (i = 0; i < rom_size; i++) checksum += rom_buf[i];
-
-	printf("DEBUG: Fixed checksum: 0x%02X\n", checksum);
-
-	if ((out = creat(argv[3], 0777)) == -1) {
+	if ((out = creat(argv[2], 0777)) == -1) {
 		fprintf(stderr, "Failed to open '%s'\n", argv[2]);
 		exit(3);
 	}
