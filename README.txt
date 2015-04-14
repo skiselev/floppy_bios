@@ -4,21 +4,21 @@ README file for Multi-Floppy BIOS Extension
 General Information
 ===================
 
-The Multi-Floppy Floppy BIOS Extension provides support for up to 8 floppy
+The Multi-Floppy BIOS Extension provides support for up to 8 floppy
 drives connected to two floppy disk controllers (FDCs). It supports any
 combination of standard IBM PC/XT/AT and PS/2 floppy drives, with disk sizes
-from 180 KB to 2.88 MB.
+from 160 KB to 2.88 MB.
 
 Configuration Utility
 ---------------------
 
-The BIOS extension has a built-in configuration utility that could be
+The BIOS extension includes a built-in configuration utility that can be
 invoked by pressing F2 during the boot (BIOS POST). The utility allows setting
 up the floppy drives and FDCs configuration, and saving it to the EEPROM
-(provided that the BIOS extension is in an EEPROM and the write is enabled).
-The ROM is cannot be programmed in system (e.g. write protected, or an EPROM
-chip is used instead of EEPROM), the configuration utility provides a dump
-of the configuration data, so the user can program it manually.
+(provided that the BIOS extension is stored in an EEPROM and the write is
+enabled). If the ROM is cannot be programmed in system (e.g. write protected,
+or an EPROM chip is used instead of EEPROM), the configuration utility provides
+a dump of the configuration data, so the user can program it manually.
 Please refer to the Implementation Notes section for detailed information on
 the configuration data structure.
 
