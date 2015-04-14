@@ -92,3 +92,5 @@ msg_cfg_phys_num db	0Dh, 0Ah, 'Enter the physical drive number (0-3): ', 00h
 msg_cfg_phys_alr db	0Dh, 0Ah, 'Error: Physical drive already exists.', 00h
 msg_cfg_log_num	db	0Dh, 0Ah, 'Enter the logical drive number (0-', 00h
 msg_cfg_type	db	0Dh, 0Ah, 'Enter the drive type (1:360 KB, 2:1.2 MB, 3:720 KB, 4:1.44 MB, 6:2.88 MB): ', 00h
+msg_boot_failed db	'Boot failed, error ', 00h
+msg_boot_retry	db	'. Press F for the original IPL or any key to try again...', 0Dh, 0Ah, 00h

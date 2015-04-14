@@ -1142,6 +1142,7 @@ add_drive:
 	stosb				; store FDC number
 	mov	al,ah
 	stosb				; store drive type
+	cld				; restore default / forward direction
 	pop	ds
 	pop	di
 	pop	si

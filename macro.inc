@@ -23,7 +23,7 @@
 ;=========================================================================
 
 ;=========================================================================
-; setloc - Set location. Insert 0FFh bytes until specifed location is reached.
+; setloc - Set location. Insert 00h bytes until specifed location is reached.
 ;-------------------------------------------------------------------------
 %imacro setloc  1.nolist
 %assign pad_bytes (%1-($-$$)-START)
@@ -33,6 +33,6 @@
 %endif
 %if pad_bytes > 0
 %warning Inserting pad_bytes bytes
- times  pad_bytes db 0FFh
+ times  pad_bytes db 00h
 %endif
 %endm
