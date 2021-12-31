@@ -33,6 +33,11 @@ IRQ 6.
 Release Notes
 =============
 
+Version 2.3
+-----------
+- Add support for storing configuration in 128 KiB Flash ROMs
+- Run configuration utility from RAM
+
 Version 2.2
 -----------
 - Fix garbage output on CGA displays with IBM BIOS
