@@ -11,9 +11,7 @@
 ;	- see floppy2.inc for other INT 13h functions
 ;-------------------------------------------------------------------------
 ;
-; Copyright (C) 2011 - 2013 Sergey Kiselev.
-; Provided for hobbyist use on the
-;       ISA Floppy Disk and Serial Controller and XT-FDC cards.
+; Copyright (C) 2011 - 2021 Sergey Kiselev.
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -1518,26 +1516,22 @@ fdc_wait_irq_at:
 	mov	bx,fdc_calib_state	; contains IRQ flag
 	xor	cx,cx
 
-.zero:
+.zero_loop:
 	test	byte [bx],fdc_irq_flag	; test IRQ flag
 	jnz	.exit			; exit loop if interrupt had occurred
-
-.zero_loop:
 	in	al,port_b_reg
 	test	al,refresh_flag
 	jz	.zero_loop		; wait 15.09 us
-	loop	.one			; DEC CX; JNZ .one
+	loop	.one_loop		; DEC CX; JNZ .one_loop
 	jmp	.timeout
 
-.one:
+.one_loop:
 	test	byte [bx],fdc_irq_flag	; test IRQ flag
 	jnz	.exit			; exit loop if interrupt had occurred
-
-.one_loop:
 	in	al,port_b_reg
 	test	al,refresh_flag
 	jnz	.one_loop		; wait 15.09 us
-	loop	.zero			; DEC CX; JNZ .one
+	loop	.zero_loop		; DEC CX; JNZ .zero_loop
 
 .timeout:
 	mov	ah,fdc_e_timeout
@@ -1560,11 +1554,10 @@ fdc_wait_irq_xt:
 	xor	cx,cx
 
 .1:
+	mov	al,10
+.2:
 	test	byte [bx],fdc_irq_flag	; test IRQ flag
 	jnz	.exit			; exit loop if interrupt had occurred
-	mov	al,10
-
-.2:
 	dec	al
 	jnz	.2
 	loop	.1
@@ -1603,26 +1596,24 @@ fdc_wait_ready_at:
 	add	dx,[bp+fdc_base]	; get register address for current FDC
 	xor	cx,cx
 
-.zero:
+.zero_loop:
 	in	al,dx			; read I/O port
 	test	al,fdc_stat_ready
 	jnz	.exit			; exit loop if bit(s) set to 1
-
-.zero_loop:
 	in	al,port_b_reg
 	test	al,refresh_flag
 	jz	.zero_loop		; wait 15.09 us
-	dec	cx
-	jz	.timeout
+	loop	.one_loop		; DEC CX; JNZ .one_loop
+	jmp	.timeout
+
+.one_loop:
 	in	al,dx			; read I/O port again
 	test	al,fdc_stat_ready
 	jnz	.exit			; exit loop of bit(s) set to 1
-
-.one_loop:
 	in	al,port_b_reg
 	test	al,refresh_flag
 	jnz	.one_loop		; wait 15.09 us
-	loop	.zero
+	loop	.zero_loop		; DEC CX; JNZ .zero_loop
 
 .timeout:
 	stc
@@ -1640,12 +1631,11 @@ fdc_wait_ready_xt:
         xor     cx,cx
 
 .1:
+	mov	al,10
+.2:
 	in	al,dx			; read I/O port
 	test	al,fdc_stat_ready
 	jnz	.exit			; exit loop if bit(s) set to 1
-	mov	al,10
-
-.2:
 	dec	al
 	jnz	.2
 	loop	.1

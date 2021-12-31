@@ -2,9 +2,7 @@
 ; floppy_main.asm - Floppy BIOS main file
 ;-------------------------------------------------------------------------
 ;
-; Copyright (C) 2011 - 2013 Sergey Kiselev.
-; Provided for hobbyist use on the
-;       ISA Floppy Disk and Serial Controller and XT-FDC cards.
+; Copyright (C) 2011 - 2021 Sergey Kiselev.
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -77,12 +75,6 @@ fdc_media_state	equ	90h	; byte[4] - drive media state (drives 0 - 3)
 fdc_cylinder	equ	94h	; byte[2] - current cylinder (drives 0 - 1)
 
 ;-------------------------------------------------------------------------
-; temporary area (07C0:0000) for configuration utility
-temp_segment	equ	07C0h
-eeprom_write	equ	0	; EEPROM write routine
-temp_config	equ	100h	; configuration storage for configuration
-
-;-------------------------------------------------------------------------
 ; configuration flags
 use_at_delays	equ	01h	; Use AT delays (port 61h, bit 4)
 config_on_init	equ	02h	; Display configuration prompt on initialization
@@ -122,12 +114,7 @@ init:
 ;-------------------------------------------------------------------------
 ; print floppy controllers and drives configuration
 
-	push	es
-	mov	bx,cs
-	mov	es,bx
-	mov	bx,drive_config
 	call	print_config		; print the current configuration
-	pop	es
 
 ;-------------------------------------------------------------------------
 ; run configuration utility and update equipment if needed
@@ -457,7 +444,29 @@ config_prompt:
 	jne	.config_no_key
 	mov	si,msg_crlf
 	call	print
-	call	config_util		; F2 pressed, run the configuration
+; F2 pressed
+; copy the Floppy BIOS extension ROM to RAM and run the configuration utility
+	push	ds
+	push	es
+	push	di
+	mov	ax,cs
+	mov	ds,ax			; DS = CS
+	mov	ax,temp_segment
+	mov	es,ax			; ES = temp storage
+
+	mov	si,0
+	mov	di,0
+	mov	cx,max_page_size
+	cld
+    rep	movsb				; copy BIOS extension ROM to RAM
+	pop	di
+	mov	ax,temp_segment
+	mov	ds,ax			; DS = temporary segment
+	mov	ax,cs
+	mov	es,ax			; ES = BIOS extension ROM segment
+	call	temp_segment:config_util ; run configuration utility from RAM
+	pop	es
+	pop	ds
 	ret				; CF = 0 if configuration changed
 
 .config_no_key:
@@ -527,7 +536,8 @@ set_equipment:
 ;=========================================================================
 ; config_util - Floppy BIOS EEPROM configuration utility
 ; Input:
-;	none
+;	DS = temporary segment (in RAM)
+;	ES = Floppy BIOS segment
 ; Output:
 ;	CF = 0 - configuration changed
 ;	CF = 1 - configuration didn't change or failed to save configuration
@@ -536,29 +546,6 @@ set_equipment:
 config_util:
 	mov	si,msg_cfg_welcome
 	call	print
-
-	push	di
-	push	ds
-	push	es
-	mov	ax,cs
-	mov	ds,ax			; DS = CS
-	mov	ax,temp_segment
-	mov	es,ax			; ES = temp storage
-
-	mov	si,eeprom_write_code
-	mov	di,eeprom_write
-	mov	cx,eeprom_write_size
-	cld
-    rep	movsb				; copy the eeprom_write code
-
-	mov	si,config
-	mov	di,temp_config
-	mov	cx,config_size		; number of configuration bytes
-	cld
-    rep	movsb				; copy the configuration data
-
-	mov	ax,es
-	mov	ds,ax			; DS = temp storage
 
 .cfg_loop:
 	mov	si,msg_cfg_prompt
@@ -620,7 +607,6 @@ config_util:
 .print_cfg:
 	mov	si,msg_crlf
 	call	print
-	mov	bx,temp_config+(drive_config-config)
 	call	print_config		; print the current configuration
 	jmp	.cfg_loop
 
@@ -652,7 +638,7 @@ config_util:
 
 	mov	cx,config_size
 	dec	cx			; config_size minus checksum byte
-	mov	bx,temp_config+1	; config area, skip checksum byte
+	mov	bx,config+1		; config area, skip checksum byte
 	mov	al,0
 
 .calculate_chksum:
@@ -660,32 +646,18 @@ config_util:
 	inc	bx
 	loop	.calculate_chksum
 	neg	al
-	mov	[temp_config+(config_sum_byte-config)],al
+	mov	[config_sum_byte],al
 
 ; call eeprom_write
 
-	push	ds
-	push	es
+	mov	bx,config		; DS:BX/ES:BX = source/destination addr
 	mov	cx,config_size		; number of bytes to write
-	mov	ax,temp_segment
-	mov	ds,ax			; DS = source segment
-	mov	ax,cs
-	mov	es,ax			; ES = destination segment
-	mov	si,temp_config		; SI = source offset
-	mov	di,config		; DI = destination offset
-	call	temp_segment:eeprom_write
-	pop	es
-	pop	ds
+	call	flash_write
 	jc	.write_failed
 	mov	si,msg_cfg_saved
 	call	print
-
-	push	es			; configuration had changed, print
-	mov	bx,cs
-	mov	es,bx
-	mov	bx,drive_config
+;FIXME - should run from ROM, to confirm that the configuration was indeed updated
 	call	print_config		; print floppy drive types
-	pop	es
 
 	clc				; configuration changed
 	jmp	.exit
@@ -695,7 +667,7 @@ config_util:
 .write_failed:
 	mov	si,msg_cfg_failed
 	call	print
-	mov	bx,temp_config
+	mov	bx,config
 	mov	cx,config_size
 	mov	dx,0
 
@@ -731,7 +703,7 @@ config_util:
 	mov	ch,dl
 	add	ch,dh			; CH = total number of drives
 
-	mov	bx,word [temp_config+(fdc_config-config)+4]
+	mov	bx,word [fdc_config+4]
 					; BX = secondary FDC address
 	or	bx,bx
 	jz	.add_drive_no_fdc2
@@ -807,7 +779,7 @@ config_util:
 	pop	bx
 	sub	al,'0'
 
-	mov	si,temp_config+(drive_config-config)
+	mov	si,drive_config
 	mov	cl,NUM_DRIVES
 
 .add_drive_phys_check_num:
@@ -930,7 +902,7 @@ config_util:
 ; enable and configure secondary FDC
 
 .ena_fdc2:
-	mov	word [temp_config+(fdc_config-config)+4],fdc2_addr
+	mov	word [fdc_config+4],fdc2_addr
 	mov	si,msg_cfg_fdc_irq
 	call	print
 
@@ -945,7 +917,7 @@ config_util:
 	mov	bx,0007h		; page number + color (for graphic mode)
 	int	10h			; print the character
 	sub	al,'0'			; convert from ASCII
-	mov	byte [temp_config+(fdc_config-config)+6],al
+	mov	byte [fdc_config+6],al
 					; store into configuration arae
 
 	mov	si,msg_cfg_fdc_dma
@@ -962,7 +934,7 @@ config_util:
 	mov	bx,0007h		; page number + color (for graphic mode)
 	int	10h			; print the character
 	sub	al,'0'			; convert from ASCII
-	mov	byte [temp_config+(fdc_config-config)+7],al
+	mov	byte [fdc_config+7],al
 					; store into configuration area
 
 	jmp	.cfg_loop		; back to main configuration loop
@@ -971,7 +943,7 @@ config_util:
 ; disable secondary FDC
 
 .del_fdc2:
-	cmp	word [temp_config+(fdc_config-config)+4],0000h
+	cmp	word [fdc_config+4],0000h
 					; the secondary FDC is already disabled?
 	jz	.del_fdc2_already
 
@@ -999,7 +971,7 @@ config_util:
 	mov	bx,0007h		; page number + color (for graphic mode)
 	int	10h			; print the character
 
-	mov	bx,temp_config+(drive_config-config)
+	mov	bx,drive_config
 					; BX = drives configuration area
 	mov	dl,0
 
@@ -1018,7 +990,7 @@ config_util:
 	jne	.dec_fdc2_drv_del_loop
 
 .dec_fdc2_drv_del_done:
-	mov	word [temp_config+(fdc_config-config)+4],0000h
+	mov	word [fdc_config+4],0000h
 					; disable FDC
 	jmp	.cfg_loop
 	
@@ -1032,15 +1004,12 @@ config_util:
 ; return to the BIOS extension initialization code
 
 .exit:
-	pop	es
-	pop	ds
-	pop	di
-	ret
+	retf
 
 ;-------------------------------------------------------------------------
-; .count_drives - Count drives in the temp_config area
+; .count_drives - Count drives in the drive_config area
 ; Input:
-;	drives data (temp_config)
+;	DS:drive_config - Floppy drives' configuration data
 ; Output:
 ;	DL = number of drives on the primary FDC
 ;	DH = number of drives on the secondary FDC
@@ -1048,7 +1017,7 @@ config_util:
 .count_drives:
 	mov	cx,NUM_DRIVES
 	xor	dx,dx			; reset counters
-	mov	bx,temp_config+(drive_config-config)
+	mov	bx,drive_config
 
 .count_loop:
 	cmp	byte [bx],type_none	; last drive?
@@ -1072,7 +1041,7 @@ config_util:
 ; del_drive - Delete a drive from the configuration
 ; Input:
 ;	DL = drive number
-;	ES:temp_config - configuration data
+;	DS:drive_config - Floppy drives' configuration data
 ; Output:
 ;	none (drive is deleted)
 ;-------------------------------------------------------------------------
@@ -1080,14 +1049,14 @@ del_drive:
 	push	cx
 	push	si
 	push	di
-	push	ds
-	mov	cx,es
-	mov	ds,cx			; DS = ES
+	push	es
+	mov	cx,ds
+	mov	es,cx			; ES = DS
 	mov	cl,dl
 	mov	ch,0			; CX = number of drive to delete
 	shl	cx,1
 	shl	cx,1
-	add	cx,temp_config+(drive_config-config)
+	add	cx,drive_config
 	mov	di,cx			; DI = destination address
 	mov	si,cx
 	add	si,4			; SI = source address
@@ -1100,7 +1069,7 @@ del_drive:
 	mov	al,0
 	mov	cx,4
     rep	stosb				; fill the last entry with zeros
-	pop	ds
+	pop	es
 	pop	di
 	pop	si
 	pop	cx
@@ -1113,7 +1082,7 @@ del_drive:
 ;	BH = FDC number (0 or 1)
 ;	BL = physical drive number (0 to 3)
 ;	DL = drive number
-;	ES:temp_config - configuration data
+;	DS:drive_config - Floppy drives' configuration data
 ; Output:
 ;	none (drive is deleted)
 ;-------------------------------------------------------------------------
@@ -1121,12 +1090,12 @@ add_drive:
 	push	cx
 	push	si
 	push	di
-	push	ds
-	mov	cx,es
-	mov	ds,cx			; DS = ES
-	mov	si,temp_config+(drive_config-config)+NUM_DRIVES*4-5
+	push	es
+	mov	cx,ds
+	mov	es,cx			; ES = DS
+	mov	si,drive_config+NUM_DRIVES*4-5
 					; SI = source address
-	mov	di,temp_config+(drive_config-config)+NUM_DRIVES*4-1
+	mov	di,drive_config+NUM_DRIVES*4-1
 					; DI = destination address
 	mov	cx,NUM_DRIVES-1
 	sub	cl,dl			; CX = number of drives to move down
@@ -1143,7 +1112,7 @@ add_drive:
 	mov	al,ah
 	stosb				; store drive type
 	cld				; restore default / forward direction
-	pop	ds
+	pop	es
 	pop	di
 	pop	si
 	pop	cx
@@ -1504,12 +1473,14 @@ get_drive_type:
 ;=========================================================================
 ; print_config - Print floppy configuration
 ; Input:
-;	ES:BX	- configuration space
+;	CS:fdc_config	- FDC configuration
+;	CS:drive_config	- Floppy drives' configuration
 ; Ouput:
 ;	none
 ;-------------------------------------------------------------------------
 print_config:
 	push	ax
+	push	bx
 	push	cx
 	push	dx
 	push	si
@@ -1517,12 +1488,11 @@ print_config:
 ;-------------------------------------------------------------------------
 ; print FDC configuration
 
-	push	bx
-	add	bx,(fdc_config-drive_config) ; BX = FDC configuration table
+	mov	bx,fdc_config		; BX = FDC configuration table
 	xor	cx,cx			; CX = current FDC
 
 .print_fdcs:
-    es	cmp	word [bx],0		; FDC I/O address == 0?
+    cs	cmp	word [bx],0		; FDC I/O address == 0?
 	jz	.print_fdcs_done	; no FDC
 
 	or	cx,cx			; CX == 0?
@@ -1539,16 +1509,16 @@ print_config:
 	call	print_digit		; print FDC number (1 or 2)
 	mov	si,msg_at
 	call	print
-    es	mov	ax,word [bx]		; FDC I/O address
+    cs	mov	ax,word [bx]		; FDC I/O address
 	call	print_hex		; print FDC I/O address
 	mov	si,msg_irq
 	call	print
-    es	mov	al,byte [bx+2]		; FDC IEQ
+    cs	mov	al,byte [bx+2]		; FDC IEQ
 	mov	ah,0
 	call	print_dec		; print FDC IRQ
 	mov	si,msg_drq
 	call	print
-    es	mov	al,byte [bx+3]		; FDC DRQ
+    cs	mov	al,byte [bx+3]		; FDC DRQ
 	call	print_digit		; print FDC IRQ - a single digit number
 	inc	cx
 	cmp	cx,2
@@ -1557,16 +1527,15 @@ print_config:
 	jmp	.print_fdcs
 
 .print_fdcs_done:
-	pop	bx
 
 ;-------------------------------------------------------------------------
 ; print floppy drives configuration
 
-	push	bx
+	mov	bx,drive_config
 	xor	cx,cx			; CX = current drive
 
 .print_drives:
-    es	cmp	byte [bx],type_none	; no drive?
+    cs	cmp	byte [bx],type_none	; no drive?
 	jz	.print_drives_done
 
 	mov	si,msg_crlf		; print CR/LF before even
@@ -1585,7 +1554,7 @@ print_config:
 	call	print_digit
 	mov	si,msg_colon
 	call	print
-    es	mov	al,byte [bx]		; AL = drive type
+    cs	mov	al,byte [bx]		; AL = drive type
 	mov	ah,0
 	mov	si,ax
 	and	si,0007h		; make sure it doesn't overflow
@@ -1594,11 +1563,11 @@ print_config:
 	call	print
 	mov	si,msg_comma_hash
 	call	print
-    es	mov	al,byte [bx+2]		; AL = physical drive number
+    cs	mov	al,byte [bx+2]		; AL = physical drive number
 	call	print_digit
 	mov	si,msg_on_fdc
 	call	print
-    es	mov	al,byte [bx+1]		; AL = FDC number
+    cs	mov	al,byte [bx+1]		; AL = FDC number
 	inc	al
 	call	print_digit
 	inc	cx
@@ -1608,13 +1577,13 @@ print_config:
 	jmp	.print_drives
 
 .print_drives_done:
-	pop	bx
 	mov	si,msg_crlf
 	call	print
 
 	pop	si
 	pop	dx
 	pop	cx
+	pop	bx
 	pop	ax
 	ret
 
@@ -1827,91 +1796,7 @@ int_timer:
 %include	"floppy1.inc"		; floppy services
 %include	"floppy2.inc"
 %include	"messages.inc"		; messages
-
-;=========================================================================
-; eprom_write - Write data to the EEPROM
-; Input:
-;	CX - number of bytes to copy
-;	DS:SI - data source (in temporary space)
-;	ES:DI - data destination (in EEPROM)
-; Output:
-;	CF = 0 - success
-;		DL = 00h - EEPROM without software data protection (SDP)
-;		DL = 01h - EEPROM with software data protection
-;	CF = 1 - write failed
-;	AX, BL, CX, DX, SI, DI - trashed
-; Note: This function cannot run from the EEPROM that is being written.
-;	It needs to be copied to the RAM first.
-;-------------------------------------------------------------------------
-eeprom_write_code:
-	mov	bx,0007h		; page number + color (for graphic mode)
-					; for INT 10 function 0Eh
-	mov	dl,0			; DL = 0 - no SDP
-	cld				; increment SI and DI
-
-.write_loop:
-	mov	dh,byte [si]		; DH = DS:[SI]
-    es	cmp	byte [di],dh		; byte changed?
-	je	.write_skip
-
-	or	dl,dl			; SDP is enabled?
-	jz	.write_data		; SDP is not enabled, just write data
-
-.write_sdp:
-	mov	ax,((0Eh << 8) + 'p')	; INT 10 function 0Eh - teletype output
-	int	10h
-	cli				; in case INT 10 enabled interrupts
-    es  mov	byte [1555h],0AAh	; software data protection sequence
-    es	mov	byte [0AAAh],55h
-    es	mov	byte [1555h],0A0h
-
-.write_data:
-    es	mov	byte [di],dh		; ES:[DI] = AL (write to EEPROM)
-
-	xor	ax,ax			; counter for the delay
-
-.write_wait:
-    es	cmp	byte [di],dh		; ES:[DI] == AL?
-	je	.write_ok		; write operation is successful
-	dec	ax
-	jnz	.write_wait		; poll again
-	or	dl,dl			; SDP is enabled?
-	jnz	.failed			; write failed, even with SDP enabled
-	mov	dl,1			; enable SDP (DL = 1)
-	jmp	.write_sdp		; re-try using SDP sequence
-
-.write_ok:
-	mov	ax,((0Eh << 8) + 'w')	; INT 10 function 0Eh - teletype output
-	int	10h
-	jmp	.write_next
-
-.write_skip:
-	mov	ax,((0Eh << 8) + 's')
-	int	10h
-
-.write_next:
-	inc	si
-	inc	di
-	loop	.write_loop		; write the next byte
-
-.done:
-	clc				; completed successfully
-
-.exit:
-	sti
-	retf
-
-.failed:
-	mov	ax,((0Eh << 8) + 'E')	; INT 10 function 0Eh - teletype output
-	int	10h
-	stc				; failed to write EEPROM
-	jmp	.exit
-
-eeprom_write_size	equ	($-eeprom_write_code)
-
-%if eeprom_write_size > temp_config
-%error "eeprom_write code is too big - try increasing temp_config"
-%endif
+%include	"flash.inc"		; Flash ROM and EEPROM write code
 
 ;=========================================================================
 ; checksum correction byte - changed by fix_checksum so that
@@ -1982,6 +1867,7 @@ config_delay	dw	55		; approximately 3 seconds
 
 ; configuration flags
 config_flags	db	(config_on_boot | equip_on_init | equip_on_boot | builtin_ipl)
+;config_flags	db	(use_at_delays | config_on_boot | equip_on_init | equip_on_boot)
 
 ; call the original timer interrupt service routine
 orig_timer_isr:

@@ -1,10 +1,8 @@
 ;=========================================================================
-; messages.inc - Messages printed by BIOS POST (Power On Self Test)
+; messages.inc - Messages printed by Multi-Floppy BIOS Extension
 ;-------------------------------------------------------------------------
 ;
-; Copyright (C) 2011 - 2013 Sergey Kiselev.
-; Provided for hobbyist use on the
-;       ISA Floppy Disk and Serial Controller and XT-FDC cards.
+; Copyright (C) 2011 - 2021 Sergey Kiselev.
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -25,7 +23,7 @@ msg_copyright	db	0Dh, 0Ah
 		db	"Multi-Floppy BIOS, Version "
 		db	VERSION
 		db	". "
-		db	"Copyright (C) 2010 - 2013 Sergey Kiselev", 0Dh, 0Ah
+		db	"Copyright (C) 2010 - 2021 Sergey Kiselev", 0Dh, 0Ah
 		db	"Distributed under the terms of "
 		db	"the GNU General Public License", 0Dh, 0Ah
 msg_crlf	db      0Dh, 0Ah, 00h
@@ -78,6 +76,7 @@ msg_cfg_fdc_alr	db	0Dh, 0Ah, 'Error: The secondary FDC is already disabled.', 00
 msg_cfg_save	db	0Dh, 0Ah, 'Saving the configuration to the EEPROM. '
 		db	'Please do not reboot the computer.', 0Dh, 0Ah, 00h
 msg_cfg_saved	db	0Dh, 0Ah, 'Configuration saved successfully. The new configuration is:', 0Dh, 0Ah, 00h
+msg_cfg_unk_id	db	0Dh, 0Ah, 'Unknown Flash ROM ID: ', 00h
 msg_cfg_failed	db	0Dh, 0Ah, 'Failed to write to the EEPROM. '
 		db	'Make sure EEPROM write protection is disabled.', 0Dh, 0Ah
 		db	'Configuration data dump:', 00h

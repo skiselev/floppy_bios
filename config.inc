@@ -2,7 +2,7 @@
 ; config.inc - Configuration definitions
 ;-------------------------------------------------------------------------
 ;
-; Copyright (C) 2011 - 2013 Sergey Kiselev.
+; Copyright (C) 2011 - 2021 Sergey Kiselev.
 ; Provided for hobbyist use on the
 ;       ISA Floppy Disk and Serial Controller and XT-FDC cards.
 ;
@@ -21,6 +21,6 @@
 ;
 ;=========================================================================
 
-%define	VERSION		"2.2"		; version
+%define	VERSION		"2.3"		; version
 %define	START		0		; BIOS extension ROM starts at 0
 %define NUM_DRIVES	8		; maximal number of drives

@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-SOURCES=floppy_bios.asm floppy1.inc floppy2.inc messages.inc config.inc
+SOURCES=floppy_bios.asm floppy1.inc floppy2.inc flash.inc messages.inc config.inc
 
 all:	floppy_bios.bin
 
@@ -25,7 +25,7 @@ floppy_bios.bin: $(SOURCES) fix_checksum
 	./fix_checksum floppy_bios.bin floppy_bios.bin 0 1F7F 1F7F 1F80 1FFF 1F80
 
 fix_checksum:	fix_checksum.c
-	gcc -o fix_checksum fix_checksum.c
+	gcc -O0 -g -o fix_checksum fix_checksum.c
 
 clean:
 	rm -f floppy_bios.bin
