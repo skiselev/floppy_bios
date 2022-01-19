@@ -33,6 +33,10 @@ IRQ 6.
 Release Notes
 =============
 
+Version 2.4
+-----------
+- Add IPL method and delays type configuration options in configuration utility
+
 Version 2.3
 -----------
 - Add support for storing configuration in 128 KiB Flash ROMs
