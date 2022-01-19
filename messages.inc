@@ -2,7 +2,7 @@
 ; messages.inc - Messages printed by Multi-Floppy BIOS Extension
 ;-------------------------------------------------------------------------
 ;
-; Copyright (C) 2011 - 2021 Sergey Kiselev.
+; Copyright (C) 2011 - 2022 Sergey Kiselev.
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ msg_copyright	db	0Dh, 0Ah
 		db	"Multi-Floppy BIOS, Version "
 		db	VERSION
 		db	". "
-		db	"Copyright (C) 2010 - 2021 Sergey Kiselev", 0Dh, 0Ah
+		db	"Copyright (C) 2010 - 2022 Sergey Kiselev", 0Dh, 0Ah
 		db	"Distributed under the terms of "
 		db	"the GNU General Public License", 0Dh, 0Ah
 msg_crlf	db      0Dh, 0Ah, 00h
@@ -32,6 +32,10 @@ msg_drive	db	'Drive ', 00h
 msg_irq		db	', IRQ', 00h
 msg_drq		db	', DRQ', 00h
 msg_at		db	' at ', 00h
+msg_ipl_builtin	db	'Built-in IPL', 00h
+msg_ipl_system	db	'System IPL', 00h
+msg_xt_delay	db	'XT delays', 00h
+msg_at_delay	db	'AT delays', 00h
 msg_on_fdc	db	' on FDC ', 00h
 msg_semicolon	db	'; ', 00h
 msg_colon	db	': ', 00h
@@ -60,6 +64,8 @@ msg_cfg_help	db	0Dh, 0Ah, 'Multi-Floppy BIOS configuration help:', 0Dh, 0Ah
 		db	'd - Delete a floppy drive', 0Dh, 0Ah
 		db	'e - Enable and configure the secondary floppy disk controller', 0Dh, 0Ah
 		db	'f - Disable the secondary floppy disk controller', 0Dh, 0Ah
+		db	'i - Configure initial program loader (IPL) type', 0Dh, 0Ah
+		db	't - Configure delay method', 0Dh, 0Ah
 		db	'p - Print current configuration settings', 0Dh, 0Ah
 		db	'w - Write setting to the EEPROM and exit', 0Dh, 0Ah
 		db	'q - Exit without saving settings', 0Dh, 0Ah
@@ -73,6 +79,8 @@ msg_close_bracket db	'): ', 00h
 msg_cfg_fdc_dma	db	0Dh, 0Ah, 'Enter DMA channel number for the secondary FDC (1-3): ', 00h
 msg_cfg_fdc_del	db	0Dh, 0Ah, 'Warning: Disabling secondary FDC will delete all drives on it. Continue (y/n)? ', 00h
 msg_cfg_fdc_alr	db	0Dh, 0Ah, 'Error: The secondary FDC is already disabled.', 00h
+msg_cfg_ipl	db	0Dh, 0Ah, 'Enter initial program loader (IPL) type (b - Built-in, s - System BIOS ROM): ', 00h
+msg_cfg_delay	db	0Dh, 0Ah, 'Enter delay method (a - AT, x - PC/XT): ', 00h
 msg_cfg_save	db	0Dh, 0Ah, 'Saving the configuration to the EEPROM. '
 		db	'Please do not reboot the computer.', 0Dh, 0Ah, 00h
 msg_cfg_saved	db	0Dh, 0Ah, 'Configuration saved successfully. The new configuration is:', 0Dh, 0Ah, 00h

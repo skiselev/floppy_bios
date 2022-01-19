@@ -2,7 +2,7 @@
 ; floppy_main.asm - Floppy BIOS main file
 ;-------------------------------------------------------------------------
 ;
-; Copyright (C) 2011 - 2021 Sergey Kiselev.
+; Copyright (C) 2011 - 2022 Sergey Kiselev.
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -566,6 +566,10 @@ config_util:
 	je	.valid_cmd
 	cmp	al,'f'
 	je	.valid_cmd
+	cmp	al,'i'
+	je	.valid_cmd
+	cmp	al,'t'
+	je	.valid_cmd
 	cmp	al,'p'
 	je	.valid_cmd
 	cmp	al,'w'
@@ -591,6 +595,10 @@ config_util:
 	je	.ena_fdc2
 	cmp	al,'f'
 	je	.del_fdc2
+	cmp	al,'i'
+	je	.config_ipl
+	cmp	al,'t'
+	je	.config_delay
 	cmp	al,'p'
 	je	.print_cfg
 	cmp	al,'w'
@@ -999,6 +1007,66 @@ config_util:
 	mov	si,msg_cfg_fdc_alr
 	call	print
 	jmp	.cfg_loop		; back to main configuration loop
+
+;-------------------------------------------------------------------------
+; configure initial program loader (IPL) type
+
+.config_ipl:
+	mov	si,msg_cfg_ipl
+	call	print
+.config_ipl_key:
+	mov	ah,00h
+	int	16h			; wait for a keystroke
+	or	al,20h			; convert letters to the lower case
+	cmp	al,'b'
+	je	.config_ipl_builtin
+	cmp	al,'s'
+	je	.config_ipl_system
+	jmp	.config_ipl_key
+
+.config_ipl_builtin:
+	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
+	mov	bx,0007h		; page number + color (for graphic mode)
+	int	10h			; print the character
+	or	byte [config_flags],builtin_ipl
+	jmp	.cfg_loop
+
+.config_ipl_system:
+	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
+	mov	bx,0007h		; page number + color (for graphic mode)
+	int	10h			; print the character
+	and	byte [config_flags],~builtin_ipl
+	jmp	.cfg_loop
+
+;-------------------------------------------------------------------------
+; configure delay method
+
+.config_delay:
+	mov	si,msg_cfg_delay
+	call	print
+.config_delay_key:
+	mov	ah,00h
+	int	16h			; wait for a keystroke
+	or	al,20h			; convert letters to the lower case
+	cmp	al,'a'
+	je	.config_delay_at
+	cmp	al,'x'
+	je	.config_delay_xt
+	jmp	.config_delay_key
+
+.config_delay_at:
+	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
+	mov	bx,0007h		; page number + color (for graphic mode)
+	int	10h			; print the character
+	or	byte [config_flags],use_at_delays
+	jmp	.cfg_loop
+
+.config_delay_xt:
+	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
+	mov	bx,0007h		; page number + color (for graphic mode)
+	int	10h			; print the character
+	and	byte [config_flags],~use_at_delays
+	jmp	.cfg_loop
 
 ;-------------------------------------------------------------------------
 ; return to the BIOS extension initialization code
@@ -1495,13 +1563,6 @@ print_config:
     cs	cmp	word [bx],0		; FDC I/O address == 0?
 	jz	.print_fdcs_done	; no FDC
 
-	or	cx,cx			; CX == 0?
-	jz	.print_fdcs_1		; CX == 0, no need to print semicolon
-
-	mov	si,msg_semicolon	; print semicolon after the first FDC
-	call	print
-
-.print_fdcs_1:
 	mov	si,msg_fdc
 	call	print
 	mov	al,cl			; AL = FDC number
@@ -1520,6 +1581,8 @@ print_config:
 	call	print
     cs	mov	al,byte [bx+3]		; FDC DRQ
 	call	print_digit		; print FDC IRQ - a single digit number
+	mov	si,msg_semicolon	; print semicolon after the FDC config
+	call	print
 	inc	cx
 	cmp	cx,2
 	je	.print_fdcs_done
@@ -1527,6 +1590,29 @@ print_config:
 	jmp	.print_fdcs
 
 .print_fdcs_done:
+;-------------------------------------------------------------------------
+; print IPL type - built-in or system
+
+	mov	si,msg_ipl_system
+    cs	test	byte [config_flags],builtin_ipl
+	jz	.print_ipl
+	mov	si,msg_ipl_builtin
+
+.print_ipl:
+	call	print
+
+;-------------------------------------------------------------------------
+; print delay type - PC/XT or AT
+
+	mov	si,msg_semicolon
+	call	print
+	mov	si,msg_xt_delay
+    cs	test	byte [config_flags],use_at_delays
+	jz	.print_delay
+	mov	si,msg_at_delay
+
+.print_delay:
+	call	print
 
 ;-------------------------------------------------------------------------
 ; print floppy drives configuration
@@ -1867,7 +1953,7 @@ config_delay	dw	55		; approximately 3 seconds
 
 ; configuration flags
 config_flags	db	(config_on_boot | equip_on_init | equip_on_boot | builtin_ipl)
-;config_flags	db	(use_at_delays | config_on_boot | equip_on_init | equip_on_boot)
+;config_flags	db	(config_on_boot | equip_on_init | equip_on_boot | use_at_delays)
 
 ; call the original timer interrupt service routine
 orig_timer_isr:
