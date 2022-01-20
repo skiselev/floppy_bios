@@ -33,6 +33,10 @@ IRQ 6.
 Release Notes
 =============
 
+Version 2.5
+-----------
+- Automatically detect if the system supports AT delays
+
 Version 2.4
 -----------
 - Add IPL method and delays type configuration options in configuration utility
@@ -155,25 +159,27 @@ Pointer to mode, motor state, and selected drive for the secondary FDC variable:
 	word 0 - offset; default: 02CAh
 	word 2 - segment; default: 0000h
 
-Offset 1FB5, size 2 bytes:
+
+Offset 1FB5h, size 4 bytes:
+Pointer to the run-time Multi-Floppy BIOS flags
+	word 0 - offset; default: 02CBh
+	word 2 - segment; default: 0000h
+
+Offset 1FB9, size 2 bytes:
 Configuration prompt (Press F2...) delay in 55 ms units
 	word - default: 55 (approximately 3 seconds)
 
-Offset 1FB7, size 1 byte:
+Offset 1FBB, size 1 byte:
 Configuration flags
-	bit 0 - Use port 61h / bit 4 for delays (implemented on AT and Xi 8088)
-		default: 0 - Don't use port 61; for PC/XT class machines.
+	bit 0 - Reserved, set to 0
 	bit 1 - Display configuration prompt during extension ROM initialization
 		default: 0 - Don't display
 	bit 2 - Display configuration prompt on boot (INT 19h)
 		default: 0 - Display
-	bit 3 - Update BIOS equipment word during extension ROM initialization
 		default: 1 - Update
-	bit 4 - Update BIOS equipment word on boot (INT 19h)
-		default: 1 - Update
-	bits 5 - 7 - Reserved, set to 0
+	bits 3 - 7 - Reserved, set to 0
 		
-Offset 1FB8, size 3 bytes:
+Offset 1FBC, size 3 bytes:
 Code to run relocated timer (IRQ0) handler. The second byte is also used to
 determine what interrupt number the default INT 08h handler should be
 relocated to. This is only used in configurations with two FDCs.
@@ -181,7 +187,7 @@ relocated to. This is only used in configurations with two FDCs.
 	byte 1 - default: 0AFh (interrupt 0AFh)
 	byte 2 - default: 0CFh (IRET opcode)
 
-Offset 1FBB, size 3 bytes;
+Offset 1FBF, size 3 bytes;
 Code to run relocated INT 19h (boot) handler. The second byte is also used to
 determine what interrupt number the default INT 19h handler should be
 relocated to.
