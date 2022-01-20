@@ -58,7 +58,7 @@ tbl_floppy	dw	msg_floppy_none
 		dw	msg_floppy_2880
 		dw	msg_floppy_none
 msg_config	db	'Press F2 to run the Multi-Floppy BIOS configuration utility...', 00h
-msg_cfg_welcome	db	'Welcome to the Multi-Floppy BIOS configuration utility.', 00h
+msg_cfg_welcome	db	'Welcome to the Multi-Floppy BIOS configuration utility!', 00h
 msg_cfg_help	db	0Dh, 0Ah, 'Multi-Floppy BIOS configuration help:', 0Dh, 0Ah
 		db	'a - Add a floppy drive', 0Dh, 0Ah
 		db	'd - Delete a floppy drive', 0Dh, 0Ah
@@ -84,6 +84,7 @@ msg_cfg_delay	db	0Dh, 0Ah, 'Enter delay method (a - AT, x - PC/XT): ', 00h
 msg_cfg_save	db	0Dh, 0Ah, 'Saving the configuration to the EEPROM. '
 		db	'Please do not reboot the computer.', 0Dh, 0Ah, 00h
 msg_cfg_saved	db	0Dh, 0Ah, 'Configuration saved successfully. The new configuration is:', 0Dh, 0Ah, 00h
+msg_cfg_reboot	db	'Press any key to reboot...', 00h
 msg_cfg_unk_id	db	0Dh, 0Ah, 'Unknown Flash ROM ID: ', 00h
 msg_cfg_failed	db	0Dh, 0Ah, 'Failed to write to the EEPROM. '
 		db	'Make sure EEPROM write protection is disabled.', 0Dh, 0Ah

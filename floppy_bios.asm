@@ -79,16 +79,14 @@ fdc_cylinder	equ	94h	; byte[2] - current cylinder (drives 0 - 1)
 use_at_delays	equ	01h	; Use AT delays (port 61h, bit 4)
 config_on_init	equ	02h	; Display configuration prompt on initialization
 config_on_boot	equ	04h	; Display configuration prompt on boot
-equip_on_init	equ	08h	; Update equipment on initialization
-equip_on_boot	equ	10h	; Update equipment on boot
 builtin_ipl	equ	20h	; Use built-in IPL functionality
 
 ;=========================================================================
 ; Extension BIOS ROM header
 ;-------------------------------------------------------------------------
-signature	dw	0AA55h	; Extension ROM signature
-				; ROM size in 512 byte blocks
-rom_size	db	10h	; 8 KiB in 512 bytes blocks
+signature	dw	0AA55h		; Extension ROM signature
+					; ROM size in 512 byte blocks
+rom_size	db	10h		; 8 KiB in 512 bytes blocks
 init_entry	jmp	init
 
 ;=========================================================================
@@ -102,8 +100,8 @@ init:
 	push	si
 	push	ds
 
-	mov	ax,biosdseg
-	mov	ds,ax			; set DS to the BIOS data area
+	xor	ax,ax
+	mov	ds,ax			; set DS to the interrupt table
 
 ;-------------------------------------------------------------------------
 ; print the copyright message
@@ -120,35 +118,51 @@ init:
 ; run configuration utility and update equipment if needed
 
     cs	test	byte [config_flags],config_on_init
-	jz	.1
+	jz	.skip_config
 
 	call	config_prompt
-	jnc	.update_equipment	; configuration changed, update
 
-.1:
-    cs	test	byte [config_flags],equip_on_init
-	jz	.2
+.skip_config:
+	call	set_interrupts		; initialize interrupt vectors
 
-.update_equipment:
 	call	set_equipment
 
-.2:
+	call	set_int19_isr
+
+;-------------------------------------------------------------------------
+; end of initialization code
+
+	pop	ds
+	pop	si
+	pop	dx
+	pop	cx
+	pop	bx
+	pop	ax
+	retf
+
+;=========================================================================
+; set_interrupts - set interrupt vectors as needed
+;		   clear BIOS data area for floppies
+;                  set transfer rate in FDC CCR to 500 Kbit/sec
+; Input:
+;	DS = 0000h (interrupt vectors segment)
+; Output:
+; 	trashes registers
+;-------------------------------------------------------------------------
+set_interrupts:
 
 ;-------------------------------------------------------------------------
 ; check if at least one drive is configured
-
 	mov	dl,0
 	call	get_drive_type
 	jnc	.drives_installed
 
 	mov	si,msg_no_drives
 	call	print
-
-	xor	ax,ax
-	mov	ds,ax			; set DS to the interrupt table
-	jmp	set_int19_isr
+	jmp	.exit
 
 .drives_installed:
+	cli
 
 ;-------------------------------------------------------------------------
 ; clear the data areas
@@ -158,18 +172,18 @@ init:
 ; chear the PC/AT standard BIOS variables
 
 	xor	ax,ax
-	mov	word [fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
-	mov	word [fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
-	mov	byte [fdc_last_rate],al
-	mov	byte [fdc_info],al	; FIXME - what is the default?
-	mov	word [fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
-	mov	word [fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
+	mov	word [400h+fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
+	mov	word [400h+fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
+	mov	byte [400h+fdc_last_rate],al
+	mov	byte [400h+fdc_info],al	; FIXME - what is the default?
+	mov	word [400h+fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
+	mov	word [400h+fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
 
 ; set the transfer rate of the primary FDC to a known value (500 Kbit/sec)
 
     cs	mov	dx,word [fdc_config]	; DX = primary FDC base address
 	add	dx,fdc_ccr_reg
-	out	dx,al			; Note: AL = 00
+	out	dx,al			; Note: AL = 00 - 500 Kbit/sec
 
 ; clear the data areas used for > 2 drive support
 
@@ -183,45 +197,15 @@ init:
 
     cs  mov	dx,word [fdc_config+4]	; DX = secondary FDC base address
 	or	dx,dx			; DX == 0? (no secondary FDC)
-	jz	set_interrupts		; no secondary FDC
+	jz	.no_fdc2		; no secondary FDC
 
 ; set the transfer rate of the secondary FDC to a known value (500 Kbit/sec)
 
 	add	dx,fdc_ccr_reg
-	out	dx,al
+	out	dx,al			; Note: AL = 00 - 500 Kbit/sec
 
 ;-------------------------------------------------------------------------
 ; set interrupt vectors and unmask interrupts on PIC
-
-set_interrupts:
-	cli
-
-	mov	ds,ax			; set DS to the interrupt table
-
-; set interrupt vector for the primary FDC
-
-    cs	mov	bl,byte [fdc_config+2]	; IRQ number for the primary FDC
-	mov	cl,bl			; CL = IRQ number for the primary FDC
-	mov	bh,0
-	add	bx,8			; IRQ mapping starts form INT 8
-	shl	bx,1			; each interrupt vector takes 4 bytes
-	shl	bx,1			; multiply by 4
-	mov	word [bx],int_fdc
-	mov	word [bx+2],cs
-
-; unmask primary FDC interrupt on PIC
-
-	in	al,pic1_reg1		; AL = interrupt mask
-	mov	ch,0FEh			; CH, bit 0 = 0, all other bits = 1
-	rol	ch,cl			; shift 0 bit to IRQ position
-	and	al,ch			; unmask the IRQ
-	out	pic1_reg1,al
-
-; check if there is a secondary FDC
-
-	cmp	dx,0			; secondary FDC configured?
-	je	.no_fdc2		; no secondary FDC, skip interrupt
-					; initialization for it
 
 ; set interrupt vector for the secondary FDC
 
@@ -258,10 +242,30 @@ set_interrupts:
 
 .no_fdc2:
 
+; set interrupt vector for the primary FDC
+
+    cs	mov	bl,byte [fdc_config+2]	; IRQ number for the primary FDC
+	mov	cl,bl			; CL = IRQ number for the primary FDC
+	mov	bh,0
+	add	bx,8			; IRQ mapping starts form INT 8
+	shl	bx,1			; each interrupt vector takes 4 bytes
+	shl	bx,1			; multiply by 4
+	mov	word [bx],int_fdc
+	mov	word [bx+2],cs
+
+; unmask primary FDC interrupt on PIC
+
+	in	al,pic1_reg1		; AL = interrupt mask
+	mov	ch,0FEh			; CH, bit 0 = 0, all other bits = 1
+	rol	ch,cl			; shift 0 bit to IRQ position
+	and	al,ch			; unmask the IRQ
+	out	pic1_reg1,al
+
 ; set INT 1Eh vector to disk parameters table
 
 	mov	word [vect_int_1E],int_1E
 	mov	word [vect_int_1E+2],cs
+
 	mov	bx,vect_int_40
 	mov	si,msg_int40
 
@@ -280,12 +284,21 @@ set_interrupts:
 	mov	word [bx+2],cs
 	sti
 	call	print
+.exit:
+	ret
 
+;=========================================================================
+; set_int19_isr - Set INT 19h (boot) interrupt vector to Multi-Floppy BIOS
+; Input:
+;	DS = 0000h (interrupt vectors segment)
+; Output:
+; 	trashes registers
+;-------------------------------------------------------------------------
 set_int19_isr:
 
 ; relocate INT 19h (boot) interrupt vector
 
-    cs	test	byte [config_flags],(config_on_boot | equip_on_boot | builtin_ipl)
+    cs	test	byte [config_flags],(config_on_boot | builtin_ipl)
 	jz	.skip_int19		; nothing to do on boot, don't set
 
     cs	mov	bl,byte [int_19_relocate] ; interrupt number for INT 19
@@ -302,17 +315,7 @@ set_int19_isr:
 	mov	word [vect_int_19+2],cs
 
 .skip_int19:
-
-;-------------------------------------------------------------------------
-; end of initialization code
-
-	pop	ds
-	pop	si
-	pop	dx
-	pop	cx
-	pop	bx
-	pop	ax
-	retf
+	ret
 
 ;-------------------------------------------------------------------------
 ; prompt for the configuration utility
@@ -326,34 +329,25 @@ int_19:
 	push	ds
 
 	xor	ax,ax
-	mov	ds,ax
+	mov	ds,ax			; set DS to the interrupt table
 
 	mov	word [vect_int_1E],int_1E	; fix diskette parameter
 	mov	word [vect_int_1E+2],cs		; table vector
 
-	mov	ax,biosdseg
-	mov	ds,ax			; set DS to the BIOS data area
 
     cs	test	byte [config_flags],config_on_boot
-	jz	.1
+	jz	.update_equipment
 
 	call	config_prompt
-	jnc	.update_equipment	; configuration changed, update
-
-.1:
-    cs	test	byte [config_flags],equip_on_boot
-	jz	.2
 
 .update_equipment:
 	call	set_equipment
 
-.2:
-
     cs	test	byte [config_flags],builtin_ipl
-	jz	.3
+	jz	.exit
 	call	ipl
 
-.3:
+.exit:
 	pop	ds
 	pop	si
 	pop	dx
@@ -418,13 +412,13 @@ ipl:
 ;=========================================================================
 ; config_prompt - display configuration prompt, run configuration utility
 ; Input:
-;	none
+;	DS = 0000h (interrupt vectors segment)
 ; Output:
 ;	CF = 0 - configuration changed
 ;	CF = 1 - configuration not changed
 ; 	trashes registers
 ; Note:
-;	DS should be set to 0040h (BIOS data area)
+;	DS should be set to 0040h (BIOS data area)-XXX? Why?!
 ;-------------------------------------------------------------------------
 config_prompt:
 	mov	si,msg_config
@@ -467,39 +461,33 @@ config_prompt:
 	call	temp_segment:config_util ; run configuration utility from RAM
 	pop	es
 	pop	ds
-	ret				; CF = 0 if configuration changed
+	ret
 
 .config_no_key:
 
 ; this code waits approximately 18.2 ms
-	mov	dx,word [ticks_lo]
+	mov	dx,word [400h+ticks_lo]
 
 .wait:
-	cmp	dx,word [ticks_lo]
+	cmp	dx,word [400h+ticks_lo]
 	je	.wait
 	loop	.config_loop
 
 .config_esc:
 	mov	si,msg_crlf
 	call	print
-
-.config_done:
-	stc				; configuration didn't change
 	ret
 
 ;=========================================================================
 ; set_equipment - set floppy configuration in BIOS equipment word
 ; Input:
-;	none (scans configuration area)
+;	scans configuration area
+;	DS = 0000h (interrupt vectors segment)
 ; Output:
-;	CF = 0 - equipment updated, at least one drive configured
-;	CF = 1 - equipment not updated, no drives configured
 ;	AX, CX, DX - trashed
 ; Note:
-;	DS should be set to 0040h (BIOS data area)
+;	Reboots the system in case the configuration was changed
 ;-------------------------------------------------------------------------
-; set equipment bits
-
 set_equipment:
 	mov	dl,0			; first floppy drive to check
 
@@ -514,7 +502,7 @@ set_equipment:
 	cmp	dl,0
 	jz	.count_no_drives	; no floppies configured
 
-	mov	al,byte [equipment_list]
+	mov	al,byte [400h+equipment_list]
 					; set all floppy bits to 0
 	and	al,~(equip_floppies|equip_floppy_num)
 	
@@ -524,7 +512,7 @@ set_equipment:
 	shl	dl,cl
 	or	al,dl			; set number of floppies
 
-	mov	byte [equipment_list],al
+	mov	byte [400h+equipment_list],al
 ;	clc				; Optimization:
 					; CF = 0 set by "or al,dl"
 	ret
@@ -632,7 +620,6 @@ config_util:
 .exit_no_save:
 	mov	si,msg_cfg_exit
 	call	print
-	stc				; configuration didn't change
 	jmp	.exit
 
 ;-------------------------------------------------------------------------
@@ -664,11 +651,19 @@ config_util:
 	jc	.write_failed
 	mov	si,msg_cfg_saved
 	call	print
-;FIXME - should run from ROM, to confirm that the configuration was indeed updated
+
 	call	print_config		; print floppy drive types
 
-	clc				; configuration changed
-	jmp	.exit
+	mov	si,msg_cfg_reboot
+	call	print
+	xor	ax,ax
+	mov	ds,ax
+	mov	word [400h+warm_boot],1234h	; set warm boot flag
+					; Optimization: AH = 00h
+;	mov	ah,00h			; wait for key
+	int	16h
+	cli
+	jmp	0FFFFh:0000h		; reboot
 
 ; save failed - print the message and dump the configuration data
 
@@ -1952,8 +1947,8 @@ fdc_motor_state_addr:
 config_delay	dw	55		; approximately 3 seconds
 
 ; configuration flags
-config_flags	db	(config_on_boot | equip_on_init | equip_on_boot | builtin_ipl)
-;config_flags	db	(config_on_boot | equip_on_init | equip_on_boot | use_at_delays)
+config_flags	db	(config_on_boot | builtin_ipl)
+;config_flags	db	(config_on_boot | use_at_delays)
 
 ; call the original timer interrupt service routine
 orig_timer_isr:
