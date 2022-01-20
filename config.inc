@@ -22,4 +22,3 @@
 %define	VERSION		"2.4"		; version
 %define	START		0		; BIOS extension ROM starts at 0
 %define NUM_DRIVES	8		; maximal number of drives
-%define DEBUG		0
