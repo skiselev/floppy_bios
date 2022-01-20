@@ -799,14 +799,8 @@ fdc_motor_on:
 	or	al,dl			; indicate that motor is on
 	call	set_motor_state		; update motor state (AL) in data area
 	sti
-	ror	al,1
-	ror	al,1
-	ror	al,1
-	ror	al,1
-	or	al,0Ch			; DMA and IRQ enabled, no reset
-	mov	dx,fdc_dor_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
-	out	dx,al			; send it to FDC - start motor
+	or	al,40h			; no reset
+	call	set_fdc_dor
 	mov	ax,90FDh
 	int	15h			; call OS hook
 	jc	.exit
@@ -846,14 +840,8 @@ fdc_motor_on:
 .already_on:
 	call	set_motor_state		; update motor state (AL) in data area
 	sti
-	ror	al,1
-	ror	al,1
-	ror	al,1
-	ror	al,1
-	or	al,0Ch			; DMA and IRQ enabled, no reset
-	mov	dx,fdc_dor_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
-	out	dx,al			; send it to FDC - start motor
+	or	al,40h			; no reset
+	call	set_fdc_dor
 	jmp	.exit
 
 ;=========================================================================
@@ -1294,21 +1282,16 @@ fdc_reset:
 	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ6 flag
 	call	set_motor_state_read	; set read / verify state
 	call	get_motor_state		; AL = motor state byte
-	rol	al,1			; after rotation:
-	rol	al,1			; 	bits 7-4: motor state
-	rol	al,1			; 	bit 3: operation type (R/W)
-	rol	al,1			;	bits 1-0: drive select
-	and	al,0FBh			; clear reserved bit
-	or	al,08h			; DMA and IRQ enabled, reset
-	mov	dx,fdc_dor_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
-	out	dx,al			; send it to FDC
+	and	al,0BFh			; clear bit 6 - reset
+	push	ax			; set_fdc_dor trashes AX, save it
+	call	set_fdc_dor
+	pop	ax
 	mov	cx,3
 	call	delay_15us		; 30-45 us delay
-	or	al,0Ch
-	out	dx,al			; DMA and IRQ enabled, no reset
+	or	al,40h			; set bit 6 - no reset
+	call	set_fdc_dor
 	sti
-	call	fdc_wait_irq		; wait for IRQ6
+	call	fdc_wait_irq		; wait for IRQ
 	jc	.exit
 	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ flag
 	xor	ah,ah			; no errors

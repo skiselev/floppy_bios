@@ -75,11 +75,14 @@ fdc_media_state	equ	90h	; byte[4] - drive media state (drives 0 - 3)
 fdc_cylinder	equ	94h	; byte[2] - current cylinder (drives 0 - 1)
 
 ;-------------------------------------------------------------------------
-; configuration flags
-use_at_delays	equ	01h	; Use AT delays (port 61h, bit 4)
+; ROM configuration flags
+irq_sharing	equ	01h	; Primary and secondary FDCs share IRQ and DMA
 config_on_init	equ	02h	; Display configuration prompt on initialization
 config_on_boot	equ	04h	; Display configuration prompt on boot
-builtin_ipl	equ	20h	; Use built-in IPL functionality
+builtin_ipl	equ	08h	; Use built-in IPL functionality
+
+; Runtime ROM configuration flags
+use_at_delays	equ	01h	; Use AT delays (port 61h, bit 4)
 
 ;=========================================================================
 ; Extension BIOS ROM header
@@ -961,7 +964,7 @@ config_util:
 	int	10h			; print the character
 	sub	al,'0'			; convert from ASCII
 	mov	byte [fdc_config+6],al
-					; store into configuration arae
+					; store into configuration area
 
 	mov	si,msg_cfg_fdc_dma
 	call	print
@@ -979,6 +982,18 @@ config_util:
 	sub	al,'0'			; convert from ASCII
 	mov	byte [fdc_config+7],al
 					; store into configuration area
+
+
+	cmp	byte [fdc_config+3],al
+	je	.irq_sharing
+	mov	al,byte [fdc_config+6]
+	cmp	byte [fdc_config+2],al
+	je	.irq_sharing
+	and	byte [config_flags],~irq_sharing
+	jmp	.cfg_loop
+
+.irq_sharing:
+	or	byte [config_flags],irq_sharing
 
 	jmp	.cfg_loop		; back to main configuration loop
 
@@ -1444,7 +1459,7 @@ check_motor_state_write:
 ;-------------------------------------------------------------------------
 set_motor_state:
 	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
-	jae	.fdc2
+	je	.fdc2
 	mov	byte [fdc_motor_state],al ; set the byte for the primary FDC
 	ret
 
@@ -1456,6 +1471,57 @@ set_motor_state:
 	mov	byte [bx],al		; set the byte for the secondary FDC
 	pop	ds
 	pop	bx
+	ret
+
+;=========================================================================
+; set_fdc_dor - set FDC Digital Output Register - DOR
+;                   enable IRQ+DMA in the current controller
+;		    disable IRQ+DMA on the other controller
+; Input:
+;	AL = new motor state
+;	[BP+fdc_num] = FDC number
+;	[BP+fdc_base] = FDC base I/O address
+; Output:
+;	AL, DX trashed
+;-------------------------------------------------------------------------
+set_fdc_dor:
+	ror	al,1
+	ror	al,1
+	ror	al,1
+	ror	al,1
+	or	al,08h			; DMA+IRQ enabled
+	mov	dx,fdc_dor_reg
+        add	dx,[bp+fdc_base]        ; get register address for current FDC
+	out	dx,al			; send the state to FDC
+    cs	test	byte [config_flags],irq_sharing
+	jz	.no_irq_sharing		; exit if no IRQ+DMA sharing
+
+	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
+	je	.fdc2
+	push	bx
+	push	ds
+    cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
+					; for the secondary FDC
+	mov	al,byte [bx]		; get the byte for the secondary FDC
+    cs	mov	dx,[fdc_config+4]	; DX = secondary FDC address
+	pop	ds
+	pop	bx
+	jmp	.disable_irq
+
+.fdc2:
+	mov	al,byte [fdc_motor_state] ; get the byte for the primary FDC
+    cs	mov	dx,[fdc_config]		; DX = primary FDC address
+
+.disable_irq:
+	ror	al,1
+	ror	al,1
+	ror	al,1
+	ror	al,1
+	and	al,0F7h			; DMA+IRQ disabled
+	add	dx,fdc_dor_reg
+	out	dx,al			; send the state to FDC
+
+.no_irq_sharing:
 	ret
 
 ;=========================================================================
@@ -1879,7 +1945,12 @@ int_timer:
 	or	dx,dx
 	jz	.exit			; no secondary FDC, done
 	add	dx,fdc_dor_reg		; DX = Digital Output register
-	mov	al,0Ch			; turn off motors, enable DMA + IRQ
+	mov	al,0Ch			; turn off motors, enable DMA+IRQ, no reset
+    cs	test	byte [config_flags],irq_sharing
+	jnz	.no_irq_sharing
+	mov	al,04h			; turn off motors, disable DMA+IRQ, no reset
+
+.no_irq_sharing:
 	out	dx,al
 
 .exit:
@@ -1961,7 +2032,7 @@ fdc_motor_state_addr:
 		dw	(0B2h * 4 + 2)	; offset
 		dw	0		; segment
 
-; Multi-Floppy BIOS flags determined at the run time
+; Multi-Floppy BIOS flags determined at the runtime
 runtime_flags_addr:
 		dw	(0B2h * 4 + 3)	; offset
 		dw	0		; segment
@@ -1970,7 +2041,7 @@ runtime_flags_addr:
 config_delay	dw	55		; approximately 3 seconds
 
 ; configuration flags
-config_flags	db	(config_on_boot | builtin_ipl)
+config_flags	db	(config_on_boot)
 
 ; call the original timer interrupt service routine
 orig_timer_isr:

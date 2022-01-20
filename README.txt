@@ -22,20 +22,13 @@ a dump of the configuration data, so the user can program it manually.
 Please refer to the Implementation Notes section for detailed information on
 the configuration data structure.
 
-Secondary FDC Configuration
----------------------------
-
-Currently the BIOS extension does not support DMA channel and IRQ sharing with
-the primary FDC. Therefore the secondary FDC must not use DMA channel 2 and
-IRQ 6. 
-
-
 Release Notes
 =============
 
 Version 2.5
 -----------
 - Automatically detect if the system supports AT delays
+- Enable IRQ and DMA channel sharing between primary and secondary FDCs
 
 Version 2.4
 -----------
@@ -171,13 +164,15 @@ Configuration prompt (Press F2...) delay in 55 ms units
 
 Offset 1FBB, size 1 byte:
 Configuration flags
-	bit 0 - Reserved, set to 0
+	bit 0 - 1: Enable IRQ and DMA sharing; 0: Disable IRQ and DMA sharing
+		Set automatically when configuring the secondary FDC
 	bit 1 - Display configuration prompt during extension ROM initialization
 		default: 0 - Don't display
 	bit 2 - Display configuration prompt on boot (INT 19h)
-		default: 0 - Display
-		default: 1 - Update
-	bits 3 - 7 - Reserved, set to 0
+		default: 1 - Display
+	bit 3 - Use built-in IPL functionality
+		default: 0 - Don't use built-in IPL, use System BIOS IPL
+	bits 4 - 7 - Reserved, set to 0
 		
 Offset 1FBC, size 3 bytes:
 Code to run relocated timer (IRQ0) handler. The second byte is also used to
@@ -232,7 +227,5 @@ TODO
 
 - Detect and initialize FDC controllers on initialization. Display a warning
   message on timeout/controller not present.
-
-- Implement IRQ/DRQ sharing for primary FDC and secondary FDC.
 
 - Make the ROM PnP specs compliant?
