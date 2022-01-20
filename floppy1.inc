@@ -1501,7 +1501,10 @@ fdc_set_rate:
 ;	AL - trashed
 ;-------------------------------------------------------------------------
 fdc_wait_irq:
-    cs	test	byte [config_flags],use_at_delays ; use AT delays?
+	push	ds
+    cs	lds	bx,[runtime_flags_addr]
+	test	byte [bx],use_at_delays ; use AT delays?
+	pop	ds
 	jz	fdc_wait_irq_xt
 
 ; fdc_wait_irq subroutine for AT
@@ -1585,7 +1588,12 @@ fdc_wait_irq_xt:
 ;-------------------------------------------------------------------------
 
 fdc_wait_ready:
-    cs	test	byte [config_flags],use_at_delays ; use AT delays?
+	push	bx
+	push	ds
+    cs	lds	bx,[runtime_flags_addr]
+	test	byte [bx],use_at_delays ; use AT delays?
+	pop	ds
+	pop	bx
 	jz	fdc_wait_ready_xt
 
 ; fdc_wait_ready subroutine for AT

@@ -109,6 +109,20 @@ init:
 	mov	si,msg_copyright
 	call	print
 
+;---------------------------------------------------------------------
+; initialize interrupt vectors and equipment word
+
+	call	set_interrupts
+
+	call	set_equipment
+
+	call	set_int19_isr
+
+;-------------------------------------------------------------------------
+; Determine if system supports AT delays
+
+	call	check_delays
+
 ;-------------------------------------------------------------------------
 ; print floppy controllers and drives configuration
 
@@ -123,12 +137,6 @@ init:
 	call	config_prompt
 
 .skip_config:
-	call	set_interrupts		; initialize interrupt vectors
-
-	call	set_equipment
-
-	call	set_int19_isr
-
 ;-------------------------------------------------------------------------
 ; end of initialization code
 
@@ -139,6 +147,42 @@ init:
 	pop	bx
 	pop	ax
 	retf
+
+;=========================================================================
+; check_delays - check if system supports AT delays
+; Input:
+;	DS = 0000h (interrupt vectors segment)
+; Output:
+;	sets flags at runtime_flags_addr
+;	trashes AX and DX registers
+;-------------------------------------------------------------------------
+check_delays:
+	sti
+
+; this code waits approximately 18.2 ms
+	mov	dx,word [biosdseg*10h+ticks_lo]
+	in	al,port_b_reg
+	and	al,refresh_flag		; get current refresh_flag value
+	mov	ah,al			; store in AH
+.wait:
+	in	al,port_b_reg
+	and	al,refresh_flag		; get updated refresh_flag value
+	cmp	ah,al
+	jne	.at_delays		; refresh_flag changed - AT delays
+
+	cmp	dx,word [biosdseg*10h+ticks_lo]
+	je	.wait			; wait a bit more
+	jmp	.exit			; refresh_flag didn't change - XT delays
+
+.at_delays:
+	push	ds
+    cs  lds	bx,[runtime_flags_addr]
+	or	byte [bx],use_at_delays
+	pop	ds
+
+.exit:
+	ret
+
 
 ;=========================================================================
 ; set_interrupts - set interrupt vectors as needed
@@ -172,12 +216,12 @@ set_interrupts:
 ; chear the PC/AT standard BIOS variables
 
 	xor	ax,ax
-	mov	word [400h+fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
-	mov	word [400h+fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
-	mov	byte [400h+fdc_last_rate],al
-	mov	byte [400h+fdc_info],al	; FIXME - what is the default?
-	mov	word [400h+fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
-	mov	word [400h+fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
+	mov	word [biosdseg*10h+fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
+	mov	word [biosdseg*10h+fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
+	mov	byte [biosdseg*10h+fdc_last_rate],al
+	mov	byte [biosdseg*10h+fdc_info],al	; FIXME - what is the default?
+	mov	word [biosdseg*10h+fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
+	mov	word [biosdseg*10h+fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
 
 ; set the transfer rate of the primary FDC to a known value (500 Kbit/sec)
 
@@ -191,7 +235,7 @@ set_interrupts:
 	mov	word [bx],ax		; clear 4 bytes
 	mov	word [bx+2],ax
     cs  lds	bx,[fdc_motor_state_addr]
-	mov	word [bx],ax		; clear 2 bytes
+	mov	word [bx],ax		; clear 2 bytes; also clears runtime_flags_addr
 
 ; check if there is a secondary FDC
 
@@ -466,10 +510,10 @@ config_prompt:
 .config_no_key:
 
 ; this code waits approximately 18.2 ms
-	mov	dx,word [400h+ticks_lo]
+	mov	dx,word [biosdseg*10h+ticks_lo]
 
 .wait:
-	cmp	dx,word [400h+ticks_lo]
+	cmp	dx,word [biosdseg*10h+ticks_lo]
 	je	.wait
 	loop	.config_loop
 
@@ -502,7 +546,7 @@ set_equipment:
 	cmp	dl,0
 	jz	.count_no_drives	; no floppies configured
 
-	mov	al,byte [400h+equipment_list]
+	mov	al,byte [biosdseg*10h+equipment_list]
 					; set all floppy bits to 0
 	and	al,~(equip_floppies|equip_floppy_num)
 	
@@ -512,7 +556,7 @@ set_equipment:
 	shl	dl,cl
 	or	al,dl			; set number of floppies
 
-	mov	byte [400h+equipment_list],al
+	mov	byte [biosdseg*10h+equipment_list],al
 ;	clc				; Optimization:
 					; CF = 0 set by "or al,dl"
 	ret
@@ -556,8 +600,6 @@ config_util:
 	je	.valid_cmd
 	cmp	al,'i'
 	je	.valid_cmd
-	cmp	al,'t'
-	je	.valid_cmd
 	cmp	al,'p'
 	je	.valid_cmd
 	cmp	al,'w'
@@ -585,8 +627,6 @@ config_util:
 	je	.del_fdc2
 	cmp	al,'i'
 	je	.config_ipl
-	cmp	al,'t'
-	je	.config_delay
 	cmp	al,'p'
 	je	.print_cfg
 	cmp	al,'w'
@@ -658,7 +698,7 @@ config_util:
 	call	print
 	xor	ax,ax
 	mov	ds,ax
-	mov	word [400h+warm_boot],1234h	; set warm boot flag
+	mov	word [biosdseg*10h+warm_boot],1234h	; set warm boot flag
 					; Optimization: AH = 00h
 ;	mov	ah,00h			; wait for key
 	int	16h
@@ -1031,36 +1071,6 @@ config_util:
 	mov	bx,0007h		; page number + color (for graphic mode)
 	int	10h			; print the character
 	and	byte [config_flags],~builtin_ipl
-	jmp	.cfg_loop
-
-;-------------------------------------------------------------------------
-; configure delay method
-
-.config_delay:
-	mov	si,msg_cfg_delay
-	call	print
-.config_delay_key:
-	mov	ah,00h
-	int	16h			; wait for a keystroke
-	or	al,20h			; convert letters to the lower case
-	cmp	al,'a'
-	je	.config_delay_at
-	cmp	al,'x'
-	je	.config_delay_xt
-	jmp	.config_delay_key
-
-.config_delay_at:
-	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
-	mov	bx,0007h		; page number + color (for graphic mode)
-	int	10h			; print the character
-	or	byte [config_flags],use_at_delays
-	jmp	.cfg_loop
-
-.config_delay_xt:
-	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
-	mov	bx,0007h		; page number + color (for graphic mode)
-	int	10h			; print the character
-	and	byte [config_flags],~use_at_delays
 	jmp	.cfg_loop
 
 ;-------------------------------------------------------------------------
@@ -1602,7 +1612,10 @@ print_config:
 	mov	si,msg_semicolon
 	call	print
 	mov	si,msg_xt_delay
-    cs	test	byte [config_flags],use_at_delays
+	push	ds
+    cs  lds	bx,[runtime_flags_addr]
+	test	byte [bx],use_at_delays	; use AT delays?
+	pop	ds
 	jz	.print_delay
 	mov	si,msg_at_delay
 
@@ -1679,7 +1692,12 @@ print_config:
 ;	    reprogrammed by an application or if it was not initialized yet
 ;-------------------------------------------------------------------------
 delay_15us:
-    cs	test	byte [config_flags],use_at_delays ; use AT delays?
+	push	bx
+	push	ds
+    cs  lds	bx,[runtime_flags_addr]
+	test	byte [bx],use_at_delays	; use AT delays?
+	pop	ds
+	pop	bx
 	jz	delay_15us_xt
 
 ; delay subroutine for AT
@@ -1943,12 +1961,16 @@ fdc_motor_state_addr:
 		dw	(0B2h * 4 + 2)	; offset
 		dw	0		; segment
 
+; Multi-Floppy BIOS flags determined at the run time
+runtime_flags_addr:
+		dw	(0B2h * 4 + 3)	; offset
+		dw	0		; segment
+
 ; configuration prompt delay in 55 ms units
 config_delay	dw	55		; approximately 3 seconds
 
 ; configuration flags
 config_flags	db	(config_on_boot | builtin_ipl)
-;config_flags	db	(config_on_boot | use_at_delays)
 
 ; call the original timer interrupt service routine
 orig_timer_isr:

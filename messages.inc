@@ -65,7 +65,6 @@ msg_cfg_help	db	0Dh, 0Ah, 'Multi-Floppy BIOS configuration help:', 0Dh, 0Ah
 		db	'e - Enable and configure the secondary floppy disk controller', 0Dh, 0Ah
 		db	'f - Disable the secondary floppy disk controller', 0Dh, 0Ah
 		db	'i - Configure initial program loader (IPL) type', 0Dh, 0Ah
-		db	't - Configure delay method', 0Dh, 0Ah
 		db	'p - Print current configuration settings', 0Dh, 0Ah
 		db	'w - Write setting to the EEPROM and exit', 0Dh, 0Ah
 		db	'q - Exit without saving settings', 0Dh, 0Ah
@@ -80,7 +79,6 @@ msg_cfg_fdc_dma	db	0Dh, 0Ah, 'Enter DMA channel number for the secondary FDC (1-
 msg_cfg_fdc_del	db	0Dh, 0Ah, 'Warning: Disabling secondary FDC will delete all drives on it. Continue (y/n)? ', 00h
 msg_cfg_fdc_alr	db	0Dh, 0Ah, 'Error: The secondary FDC is already disabled.', 00h
 msg_cfg_ipl	db	0Dh, 0Ah, 'Enter initial program loader (IPL) type (b - Built-in, s - System BIOS ROM): ', 00h
-msg_cfg_delay	db	0Dh, 0Ah, 'Enter delay method (a - AT, x - PC/XT): ', 00h
 msg_cfg_save	db	0Dh, 0Ah, 'Saving the configuration to the EEPROM. '
 		db	'Please do not reboot the computer.', 0Dh, 0Ah, 00h
 msg_cfg_saved	db	0Dh, 0Ah, 'Configuration saved successfully. The new configuration is:', 0Dh, 0Ah, 00h
