@@ -46,10 +46,9 @@ vect_int_40	equ	(40h*4)
 
 ;------------------------------------------------------------------------
 ; BIOS data area variables
-biosdseg	equ	0040h
 
 ; equipment list
-equipment_list	equ	10h	; word - equpment list
+equipment_list	equ	410h	; word - equpment list
 equip_floppies	equ	0000000000000001b	; floppy drivers installed
 equip_floppy_num equ	0000000011000000b	; 2nd floppy drive installed
 ;			        ||     `-- floppy drives installed
@@ -60,19 +59,26 @@ equip_floppy_num equ	0000000011000000b	; 2nd floppy drive installed
 ;		completion of an I/O operation
 ; bits 6 - 4:	unused
 ; bits 3 - 0:	drive's calibration status for drives 0..3 (1 = calibrated)
-fdc_calib_state	equ	3Eh	; byte - floppy drive calibration status
+fdc_calib_state	equ	43Eh	; byte - floppy drive calibration status
 fdc_irq_flag	equ	80h	; FDC IRQ had occurred.
 
-fdc_motor_state	equ	3Fh	; byte - floppy drive motor status
-fdc_motor_tout	equ	40h	; byte - floppy drive motor off timeout (ticks)
-fdc_last_error	equ	41h	; byte - status of last diskette operation
-fdc_ctrl_status	equ	42h	; byte[7] - FDC status bytes
-warm_boot	equ	72h	; word - Warm boot if equals 1234h
-ticks_lo	equ	6Ch	; word - timer ticks - low word
-fdc_last_rate	equ	8Bh	; byte - last data rate / step rate
-fdc_info	equ	8Fh	; byte - floppy dist drive information
-fdc_media_state	equ	90h	; byte[4] - drive media state (drives 0 - 3)
-fdc_cylinder	equ	94h	; byte[2] - current cylinder (drives 0 - 1)
+fdc_motor_state	equ	43Fh	; byte - floppy drive motor status
+fdc_motor_tout	equ	440h	; byte - floppy drive motor off timeout (ticks)
+fdc_last_error	equ	441h	; byte - status of last diskette operation
+fdc_ctrl_status	equ	442h	; byte[7] - FDC status bytes
+warm_boot	equ	472h	; word - Warm boot if equals 1234h
+ticks_lo	equ	46Ch	; word - timer ticks - low word
+fdc_last_rate	equ	48Bh	; byte - last data rate / step rate
+fdc_info	equ	48Fh	; byte - floppy dist drive information
+fdc_media_state	equ	490h	; byte[4] - drive media state (drives 0 - 3)
+fdc_cylinder	equ	494h	; byte[2] - current cylinder (drives 0 - 1)
+
+; variables for the secondary FDC and drives 2-7 that don't fit in BIOS data area
+; use interrupt vectors 0B0h - 0B2h to store these variables
+fdc2_media_state equ	(0B0h * 4)	; floppy drive media state for drives 4-7: 4 bytes
+fdc2_cylinder	equ	(0B1h * 4)	; current cylinder for drives 2-7: 6 bytes
+fdc2_motor_state equ	(0B1h * 4 + 2)	; mode, motor state, and selected drive for the secondary FDC: 1 byte
+runtime_flags	equ	(0B2h * 4 + 3)	; Multi-Floppy BIOS flags determined at the runtime
 
 ;-------------------------------------------------------------------------
 ; ROM configuration flags
@@ -163,7 +169,7 @@ check_delays:
 	sti
 
 ; this code waits approximately 18.2 ms
-	mov	dx,word [biosdseg*10h+ticks_lo]
+	mov	dx,word [ticks_lo]
 	in	al,port_b_reg
 	and	al,refresh_flag		; get current refresh_flag value
 	mov	ah,al			; store in AH
@@ -173,15 +179,12 @@ check_delays:
 	cmp	ah,al
 	jne	.at_delays		; refresh_flag changed - AT delays
 
-	cmp	dx,word [biosdseg*10h+ticks_lo]
+	cmp	dx,word [ticks_lo]
 	je	.wait			; wait a bit more
 	jmp	.exit			; refresh_flag didn't change - XT delays
 
 .at_delays:
-	push	ds
-    cs  lds	bx,[runtime_flags_addr]
-	or	byte [bx],use_at_delays
-	pop	ds
+	or	byte [runtime_flags],use_at_delays
 
 .exit:
 	ret
@@ -219,12 +222,12 @@ set_interrupts:
 ; chear the PC/AT standard BIOS variables
 
 	xor	ax,ax
-	mov	word [biosdseg*10h+fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
-	mov	word [biosdseg*10h+fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
-	mov	byte [biosdseg*10h+fdc_last_rate],al
-	mov	byte [biosdseg*10h+fdc_info],al	; FIXME - what is the default?
-	mov	word [biosdseg*10h+fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
-	mov	word [biosdseg*10h+fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
+	mov	word [fdc_calib_state],ax ; fdc_calib_state and fdc_motor_state
+	mov	word [fdc_motor_tout],ax  ; fdc_motor_tout and fdc_last_error
+	mov	byte [fdc_last_rate],al
+	mov	byte [fdc_info],al	; FIXME - what is the default?
+	mov	word [fdc_media_state],ax   ; fdc_media_state - bytes 0 and 1
+	mov	word [fdc_media_state+2],ax ; fdc_media_state - bytes 2 and 3
 
 ; set the transfer rate of the primary FDC to a known value (500 Kbit/sec)
 
@@ -234,11 +237,9 @@ set_interrupts:
 
 ; clear the data areas used for > 2 drive support
 
-    cs  lds	bx,[fdc_media_state_addr]
-	mov	word [bx],ax		; clear 4 bytes
-	mov	word [bx+2],ax
-    cs  lds	bx,[fdc_motor_state_addr]
-	mov	word [bx],ax		; clear 2 bytes; also clears runtime_flags_addr
+	mov	word [fdc2_media_state],ax	; clear 4 bytes
+	mov	word [fdc2_media_state+2],ax
+	mov	word [fdc2_motor_state],ax	; clear 2 bytes; also clears runtime_flags
 
 ; check if there is a secondary FDC
 
@@ -408,8 +409,6 @@ int_19:
 ;-------------------------------------------------------------------------
 ipl:
 	sti
-	xor	ax,ax
-	mov	ds,ax
 	mov	word [78h],int_1E
 	mov	word [7Ah],cs
 
@@ -464,11 +463,13 @@ ipl:
 ;	CF = 0 - configuration changed
 ;	CF = 1 - configuration not changed
 ; 	trashes registers
-; Note:
-;	DS should be set to 0040h (BIOS data area)-XXX? Why?!
 ;-------------------------------------------------------------------------
 config_prompt:
 	mov	si,msg_config
+	call	print
+	mov	si,msg_cfg_utility
+	call	print
+	mov	si,msg_ellipsis
 	call	print
 	sti				; enable interrupts (so keyboard works)
     cs	mov	cx,word [config_delay]
@@ -513,10 +514,10 @@ config_prompt:
 .config_no_key:
 
 ; this code waits approximately 18.2 ms
-	mov	dx,word [biosdseg*10h+ticks_lo]
+	mov	dx,word [ticks_lo]
 
 .wait:
-	cmp	dx,word [biosdseg*10h+ticks_lo]
+	cmp	dx,word [ticks_lo]
 	je	.wait
 	loop	.config_loop
 
@@ -549,7 +550,7 @@ set_equipment:
 	cmp	dl,0
 	jz	.count_no_drives	; no floppies configured
 
-	mov	al,byte [biosdseg*10h+equipment_list]
+	mov	al,byte [equipment_list]
 					; set all floppy bits to 0
 	and	al,~(equip_floppies|equip_floppy_num)
 	
@@ -559,7 +560,7 @@ set_equipment:
 	shl	dl,cl
 	or	al,dl			; set number of floppies
 
-	mov	byte [biosdseg*10h+equipment_list],al
+	mov	byte [equipment_list],al
 ;	clc				; Optimization:
 					; CF = 0 set by "or al,dl"
 	ret
@@ -580,6 +581,8 @@ set_equipment:
 ;-------------------------------------------------------------------------
 config_util:
 	mov	si,msg_cfg_welcome
+	call	print
+	mov	si,msg_cfg_utility
 	call	print
 
 .cfg_loop:
@@ -653,6 +656,10 @@ config_util:
 ; print the help
 
 .help:
+	mov	si,msg_crlf
+	call	print
+	mov	si,msg_cfg_utility
+	call	print
 	mov	si,msg_cfg_help
 	call	print
 	jmp	.cfg_loop
@@ -701,7 +708,7 @@ config_util:
 	call	print
 	xor	ax,ax
 	mov	ds,ax
-	mov	word [biosdseg*10h+warm_boot],1234h	; set warm boot flag
+	mov	word [warm_boot],1234h	; set warm boot flag
 					; Optimization: AH = 00h
 ;	mov	ah,00h			; wait for key
 	int	16h
@@ -1086,7 +1093,7 @@ config_util:
 	cmp	al,1Bh			; ESC?
 	je	.cfg_loop		; exit to main menu
 	or	al,20h			; convert letters to the lower case
-	cmp	al,'b'
+	cmp	al,'f'
 	je	.config_ipl_builtin
 	cmp	al,'s'
 	je	.config_ipl_system
@@ -1242,12 +1249,7 @@ get_media_state:
 	ret
 
 .fdc2:
-	push	si
-	push	ds
-    cs	lds	si,[fdc_media_state_addr]
-	mov	bl,byte [si+bx]
-	pop	ds
-	pop	si
+	mov	bl,byte [fdc2_media_state+bx]
 	ret
 
 ;=========================================================================
@@ -1269,12 +1271,7 @@ set_media_state:
 	jmp	.exit
 
 .fdc2:
-	push	si
-	push	ds
-    cs	lds	si,[fdc_media_state_addr] ; DS:SI = address of media state area
-	mov	byte [si+bx],al
-	pop	ds
-	pop	si
+	mov	byte [fdc2_media_state+bx],al
 
 .exit:
 	pop	bx
@@ -1305,12 +1302,7 @@ check_cylinder:
 	inc 	bx			; are stored after secondary FDC drives
 
 .fdc2:
-	push	si
-	push	ds
-    cs	lds	si,[fdc_cylinder_addr]	; DS:SI = address of cylinder area
-	cmp	byte [si+bx],ch
-	pop	ds
-	pop	si
+	cmp	byte [fdc2_cylinder+bx],ch
 
 .exit:
 	pop	bx
@@ -1341,12 +1333,7 @@ set_cylinder:
 	inc 	bx			; are stored after secondary FDC drives
 
 .fdc2:
-	push	si
-	push	ds
-    cs	lds	si,[fdc_cylinder_addr]	; DS:SI = address of cylinder area
-	mov	byte [si+bx],ch
-	pop	ds
-	pop	si
+	mov	byte [fdc2_cylinder+bx],ch
 
 .exit:
 	pop	bx
@@ -1432,13 +1419,7 @@ get_motor_state:
 	ret
 
 .fdc2:
-	push	bx
-	push	ds
-    cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
-					; for the secondary FDC
-	mov	al,byte [bx]		; motor state byte for the secondary FDC
-	pop	ds
-	pop	bx
+	mov	al,byte [fdc2_motor_state] ; motor state byte for the secondary FDC
 	ret
 
 ;=========================================================================
@@ -1457,14 +1438,7 @@ check_motor_state_write:
 	ret
 
 .fdc2:
-	push	bx
-	push	ds
-    cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
-					; for the secondary FDC
-	test	byte [bx],fdc_write_flag ; test the write bit 
-					; in byte for the secondary FDC
-	pop	ds
-	pop	bx
+	test	byte [fdc2_motor_state],fdc_write_flag ; test the write bit 
 	ret
 
 ;=========================================================================
@@ -1482,13 +1456,7 @@ set_motor_state:
 	ret
 
 .fdc2:
-	push	bx
-	push	ds
-    cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
-					; for the secondary FDC
-	mov	byte [bx],al		; set the byte for the secondary FDC
-	pop	ds
-	pop	bx
+	mov	byte [fdc2_motor_state],al ; set the byte for the secondary FDC
 	ret
 
 ;=========================================================================
@@ -1516,14 +1484,8 @@ set_fdc_dor:
 
 	cmp	byte [bp+fdc_num],1	; drive is on the secondary FDC?
 	je	.fdc2
-	push	bx
-	push	ds
-    cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
-					; for the secondary FDC
-	mov	al,byte [bx]		; get the byte for the secondary FDC
+	mov	al,byte [fdc2_motor_state] ; get the byte for the secondary FDC
     cs	mov	dx,[fdc_config+4]	; DX = secondary FDC address
-	pop	ds
-	pop	bx
 	jmp	.disable_irq
 
 .fdc2:
@@ -1558,14 +1520,8 @@ set_motor_state_read:
 	ret
 
 .fdc2:
-	push	bx
-	push	ds
-    cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
-					; for the secondary FDC
-	and	byte [bx],~fdc_write_flag ; clear the write bit
+	and	byte [fdc2_motor_state],~fdc_write_flag ; clear the write bit
 					; in the byte for the secondary FDC
-	pop	ds
-	pop	bx
 	ret
 
 ;=========================================================================
@@ -1584,14 +1540,8 @@ set_motor_state_write:
 	ret
 
 .fdc2:
-	push	bx
-	push	ds
-    cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
-					; for the secondary FDC
-	or	byte [bx],fdc_write_flag ; set the write bit 
+	or	byte [fdc2_motor_state],fdc_write_flag ; set the write bit 
 					; in byte for the secondary FDC
-	pop	ds
-	pop	bx
 	ret
 
 ;=========================================================================
@@ -1691,22 +1641,6 @@ print_config:
 	call	print
 
 ;-------------------------------------------------------------------------
-; print delay type - PC/XT or AT
-
-	mov	si,msg_semicolon
-	call	print
-	mov	si,msg_xt_delay
-	push	ds
-    cs  lds	bx,[runtime_flags_addr]
-	test	byte [bx],use_at_delays	; use AT delays?
-	pop	ds
-	jz	.print_delay
-	mov	si,msg_at_delay
-
-.print_delay:
-	call	print
-
-;-------------------------------------------------------------------------
 ; print floppy drives configuration
 
 	mov	bx,drive_config
@@ -1776,12 +1710,7 @@ print_config:
 ;	    reprogrammed by an application or if it was not initialized yet
 ;-------------------------------------------------------------------------
 delay_15us:
-	push	bx
-	push	ds
-    cs  lds	bx,[runtime_flags_addr]
-	test	byte [bx],use_at_delays	; use AT delays?
-	pop	ds
-	pop	bx
+	test	byte [runtime_flags],use_at_delays	; use AT delays?
 	jz	delay_15us_xt
 
 ; delay subroutine for AT
@@ -1947,17 +1876,14 @@ print_digit:
 ;-------------------------------------------------------------------------
 int_timer:
 	push	ax
-	push	bx
 	push	dx
 	push	ds
-	mov	ax,biosdseg
-	mov	ds,ax
+	xor	ax,ax
+	mov	ds,ax			; DS = 0000h
 	cmp	byte [fdc_motor_tout],1
 	jne	.exit
 
-    cs	lds	bx,[fdc_motor_state_addr] ; DS:BX = address of fdc_motor_state
-					; for the secondary FDC
-	and	byte [bx],0F0h		; motors on secondary FDC are off
+	and	byte [fdc2_motor_state],0F0h ; motors on secondary FDC are off
 
     cs	mov	dx,word [fdc_config+4]	; get base address for the secondary FDC
 	or	dx,dx
@@ -1974,7 +1900,6 @@ int_timer:
 .exit:
 	pop	ds
 	pop	dx
-	pop	bx
 	pop	ax
 	jmp	orig_timer_isr
 
@@ -1990,14 +1915,14 @@ int_timer:
 ; checksum correction byte - changed by fix_checksum so that
 ; the checksum of the code portion of the BIOS extension ROM equals 0
 ;-------------------------------------------------------------------------
-	setloc	1F7Fh
+	setloc	1FBFh
 
 code_sum_byte	db	0	; code checksum correction byte
 
 ;=========================================================================
 ; configuration space
 ;-------------------------------------------------------------------------
-	setloc	1F80h			; Configuration is at the last 128
+	setloc	1FC0h			; Configuration is at the last 64
 					; bytes of the 8 KiB ROM
 
 config:
@@ -2031,29 +1956,6 @@ fdc_config:
 .fdc1	dw	0000h			; Secondary FDC address
 	db	07h			; Secondary FDC IRQ
 	db	03h			; Secondary FDC DMA channel
-
-; pointers to the data structures other than standard BIOS data area
-; by default - use interrupt vectors 0B0h - 0B2h to store this data
-
-; floppy drive media state for drives 4-7: 4 bytes
-fdc_media_state_addr:
-		dw	(0B0h * 4)	; offset
-		dw	0		; segment
-
-; current cylinder for drives 2-7: 6 bytes
-fdc_cylinder_addr:
-		dw	(0B1h * 4)	; offset
-		dw	0		; segment
-
-; mode, motor state, and selected drive for the secondary FDC: 1 byte
-fdc_motor_state_addr:
-		dw	(0B2h * 4 + 2)	; offset
-		dw	0		; segment
-
-; Multi-Floppy BIOS flags determined at the runtime
-runtime_flags_addr:
-		dw	(0B2h * 4 + 3)	; offset
-		dw	0		; segment
 
 ; configuration prompt delay in 55 ms units
 config_delay	dw	55		; approximately 3 seconds

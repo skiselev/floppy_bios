@@ -194,7 +194,7 @@ fdc_init:
 ;=========================================================================
 ; fdc_send_specify - Send specify command to FDC
 ; Input:
-;	none
+;	DS = 0000h
 ; Output:
 ;	CF clear on success
 ;		AH = 00 - successful completion
@@ -206,8 +206,6 @@ fdc_init:
 ;-------------------------------------------------------------------------
 fdc_send_specify:
 	push	ds
-	xor	ax,ax
-	mov	ds,ax
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
 	mov	al,3		 	; FDC Specify command
 	mov	ah,byte [si]		; specify command - byte 0
@@ -420,8 +418,6 @@ int_13_fn16:
 	mov	[fdc_last_error],ah	; save the error code
 	pushf
 	push	ds
-	xor	si,si
-	mov	ds,si
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
 	mov	cl,byte [si+2]
 	pop	ds
@@ -723,8 +719,6 @@ fdc_seek:
 	call	set_cylinder		; save new cylinder number
 
 	push	ds
-	xor	si,si
-	mov	ds,si
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
 	mov	al,byte [si+9]		; AL = head settle time in ms
 	pop	ds
@@ -806,8 +800,6 @@ fdc_motor_on:
 	jc	.exit
 	push	ds
 	push	si
-	xor	si,si
-	mov	ds,si
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
 	mov	al,byte [si+0Ah]	; AL = motor start time in 1/8 second
 	pop	si
@@ -855,8 +847,6 @@ fdc_motor_on:
 fdc_end_io:
 	push	ax
 	push	ds
-	xor	bx,bx
-	mov	ds,bx
 	lds	bx,[1Eh*4]		; DS:BX -> INT 1Eh
 	mov	ah,[bx+2]		; motor timeout (ticks)
 	mov	al,[bx+4]		; sectors per track
@@ -1484,10 +1474,7 @@ fdc_set_rate:
 ;	AL - trashed
 ;-------------------------------------------------------------------------
 fdc_wait_irq:
-	push	ds
-    cs	lds	bx,[runtime_flags_addr]
-	test	byte [bx],use_at_delays ; use AT delays?
-	pop	ds
+	test	byte [runtime_flags],use_at_delays	; use AT delays?
 	jz	fdc_wait_irq_xt
 
 ; fdc_wait_irq subroutine for AT
@@ -1571,12 +1558,7 @@ fdc_wait_irq_xt:
 ;-------------------------------------------------------------------------
 
 fdc_wait_ready:
-	push	bx
-	push	ds
-    cs	lds	bx,[runtime_flags_addr]
-	test	byte [bx],use_at_delays ; use AT delays?
-	pop	ds
-	pop	bx
+	test	byte [runtime_flags],use_at_delays	; use AT delays?
 	jz	fdc_wait_ready_xt
 
 ; fdc_wait_ready subroutine for AT

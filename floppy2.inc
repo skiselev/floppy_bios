@@ -86,8 +86,8 @@ int_13:
 	mov	bp,sp
 	sub	sp,4			; make space for drive/fdc variables
 
-	mov	bx,biosdseg
-	mov	ds,bx			; DS = BIOS data segment (0040h)
+	xor	bx,bx
+	mov	ds,bx			; DS = 0000h
 
 ; fn01 doesn't need physical drive information
 
@@ -298,8 +298,6 @@ int_13_fn04:
 	call	fdc_send_cmd
 	jc	.error_end_io		; jump if failed to send command
 	push	ds
-	xor	si,si
-	mov	ds,si
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
 	mov	cl,byte [bp+int_13_al]	; number of sectors to transfer
 	mov	ah,00h
@@ -336,8 +334,6 @@ int_13_fn04:
 	jc	.error_fdc_get_result	; jump if seek failed
 
 	push	ds
-	xor	ax,ax
-	mov	ds,ax
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
 	mov	ah,byte [si+3]		; AH = sector size (02h = 512)
 	mov	al,cl			; AL = first sector number
@@ -456,8 +452,6 @@ int_13_fn05:
 	jc	.error_fdc_get_result	; jump if seek failed
 
 	push	ds
-	xor	si,si
-	mov	ds,si
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
 	mov	cl,byte [si+4]		; sectors per track
 	mov	di,word [si+7]		; format gap, sectors per track
@@ -526,8 +520,8 @@ int_13_fn05:
 int_fdc:
 	push	ax
 	push	ds
-	mov	ax,biosdseg
-	mov	ds,ax
+	xor	ax,ax
+	mov	ds,ax			; DS = 0000h
 	or	byte [fdc_calib_state],fdc_irq_flag ; set IRQ flag
 	pop	ds
 	mov	al,20h			; send EOI to PIC

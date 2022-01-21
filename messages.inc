@@ -32,10 +32,8 @@ msg_drive	db	'Drive ', 00h
 msg_irq		db	', IRQ', 00h
 msg_drq		db	', DRQ', 00h
 msg_at		db	' at ', 00h
-msg_ipl_builtin	db	'Built-in IPL', 00h
-msg_ipl_system	db	'System IPL', 00h
-msg_xt_delay	db	'XT delays', 00h
-msg_at_delay	db	'AT delays', 00h
+msg_ipl_builtin	db	'Floppy BIOS IPL', 00h
+msg_ipl_system	db	'System BIOS IPL', 00h
 msg_on_fdc	db	' on FDC ', 00h
 msg_semicolon	db	'; ', 00h
 msg_colon	db	': ', 00h
@@ -57,9 +55,10 @@ tbl_floppy	dw	msg_floppy_none
 		dw	msg_floppy_none
 		dw	msg_floppy_2880
 		dw	msg_floppy_none
-msg_config	db	'Press F2 to run the Multi-Floppy BIOS configuration utility...', 00h
-msg_cfg_welcome	db	'Welcome to the Multi-Floppy BIOS configuration utility!', 00h
-msg_cfg_help	db	0Dh, 0Ah, 'Multi-Floppy BIOS configuration help:', 0Dh, 0Ah
+msg_cfg_utility	db	'Multi-Floppy BIOS configuration utility', 00h
+msg_config	db	'Press F2 to run the ', 00h
+msg_cfg_welcome	db	'Welcome to the ', 00h
+msg_cfg_help	db	' help:', 0Dh, 0Ah
 		db	'a - Add a floppy drive', 0Dh, 0Ah
 		db	'd - Delete a floppy drive', 0Dh, 0Ah
 		db	'e - Enable and configure the secondary floppy disk controller', 0Dh, 0Ah
@@ -79,11 +78,12 @@ msg_close_bracket db	'): ', 00h
 msg_cfg_fdc_dma	db	0Dh, 0Ah, 'Enter DMA channel number for the secondary FDC (1-3): ', 00h
 msg_cfg_fdc_del	db	0Dh, 0Ah, 'Warning: Disabling secondary FDC will delete all drives on it. Continue (y/n)? ', 00h
 msg_cfg_fdc_alr	db	0Dh, 0Ah, 'Error: The secondary FDC is already disabled.', 00h
-msg_cfg_ipl	db	0Dh, 0Ah, 'Enter initial program loader (IPL) type (b - Built-in, s - System BIOS ROM): ', 00h
+msg_cfg_ipl	db	0Dh, 0Ah, 'Enter initial program loader (IPL) type (f - Floppy BIOS, s - System BIOS): ', 00h
 msg_cfg_save	db	0Dh, 0Ah, 'Saving the configuration to the EEPROM. '
 		db	'Please do not reboot the computer.', 0Dh, 0Ah, 00h
 msg_cfg_saved	db	0Dh, 0Ah, 'Configuration saved successfully. The new configuration is:', 0Dh, 0Ah, 00h
-msg_cfg_reboot	db	'Press any key to reboot...', 00h
+msg_cfg_reboot	db	'Press any key to reboot'
+msg_ellipsis	db	'...', 00h
 msg_cfg_unk_id	db	0Dh, 0Ah, 'Unknown Flash ROM ID: ', 00h
 msg_cfg_failed	db	0Dh, 0Ah, 'Failed to write to the EEPROM. '
 		db	'Make sure EEPROM write protection is disabled.', 0Dh, 0Ah

@@ -22,7 +22,7 @@ all:	floppy_bios.bin
 
 floppy_bios.bin: $(SOURCES) fix_checksum
 	nasm -O9 -f bin -o floppy_bios.bin -l floppy_bios.lst floppy_bios.asm
-	./fix_checksum floppy_bios.bin floppy_bios.bin 0 1F7F 1F7F 1F80 1FFF 1F80
+	./fix_checksum floppy_bios.bin floppy_bios.bin 0 1FBF 1FBF 1FC0 1FFF 1FC0
 
 fix_checksum:	fix_checksum.c
 	gcc -O0 -g -o fix_checksum fix_checksum.c
