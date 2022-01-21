@@ -233,9 +233,12 @@ int_13_fn04:
 
 	call	get_media_state		; BL = media state
 
-	call	set_motor_state_read	; read / verify operation
 	cmp	ah,03h			; write function
-	jne	.motor_on		; jump if not write function
+	je	.set_write
+	call	set_motor_state_read	; read / verify operation
+	jmp	.motor_on
+
+.set_write:
 	call	set_motor_state_write	; write / format operation
 
 .motor_on:
@@ -322,7 +325,7 @@ int_13_fn04:
 	mov	al,48h			; DMA mode byte for write
 	cmp	ah,03h			; write function?
 	je	.configure_dma		; jump if write function
-	mov	al,40h			; DMA mode byte for verification
+	mov	al,40h			; DMA mode byte for verify
 
 .configure_dma:
 	call	fdc_configure_dma
@@ -375,7 +378,7 @@ int_13_fn04:
 
 .send_command:
 	mov	cl,9			; 9 bytes command
-	and	byte [fdc_calib_state],~fdc_irq_flag ; wait for IRQ6
+	and	byte [fdc_calib_state],~fdc_irq_flag ; wait for IRQ
 	call	fdc_send_cmd
 	jc	.error_fdc_get_result	; jump if failed to send command
 	call	fdc_wait_irq
@@ -475,7 +478,7 @@ int_13_fn05:
 	or	ah,[bp+phys_drive]	; FDC command byte 1 (head & drive)
 	mov	al,4Dh			; FDC Format command
 	mov	cl,6			; 6 byte command
-	and	byte [fdc_calib_state],~fdc_irq_flag ; wait for IRQ6
+	and	byte [fdc_calib_state],~fdc_irq_flag ; wait for IRQ
 	call	fdc_send_cmd
 	jc	.exit_end_io		; jump if failed to send command
 	call	fdc_wait_irq
@@ -517,7 +520,7 @@ int_13_fn05:
 	jmp	.error
 
 ;=========================================================================
-; int_fdc - IRQ6 (FDC) service routine
+; int_fdc - FDC IRQ service routine
 ; Sets bit 7 in drive recalibration status byte (fdc_calib_state)
 ;-------------------------------------------------------------------------
 int_fdc:

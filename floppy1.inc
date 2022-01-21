@@ -617,10 +617,10 @@ fdc_recalibrate:
 	mov	al,07h			; FDC Recalibrate command
 	mov	ah,[bp+phys_drive]	; drive number - 2nd byte of command
 	mov	cl,2			; 2 bytes command
-	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ6 flag
+	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ flag
 	call	fdc_send_cmd
 	jc	recal_end		; failure
-	call	fdc_wait_irq		; wait for IRQ6
+	call	fdc_wait_irq		; wait for IRQ
 	jc	recal_end		; timeout waiting for interrupt
 	mov	al,08h			; FDC Sense Interrupt Status command
 	mov	cl,1			; 1 byte command
@@ -699,10 +699,10 @@ fdc_seek:
 	shl	ah,1
 	or	ah,[bp+phys_drive]	; seek - byte 1 (head / drive)
 	mov	cl,3			; 3 bytes command
-	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ6 flag
+	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ flag
 	call	fdc_send_cmd
 	jc	.set_result		; seek error
-	call	fdc_wait_irq		; wait for IRQ6
+	call	fdc_wait_irq		; wait for IRQ
 	jc	.set_result		; timeout waiting for interrupt
 
 	mov	al,08h			; FDC Sense Interrupt Status command
@@ -1279,7 +1279,7 @@ fdc_get_error:
 ;-------------------------------------------------------------------------
 fdc_reset:
 	cli
-	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ6 flag
+	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ flag
 	call	set_motor_state_read	; set read / verify state
 	call	get_motor_state		; AL = motor state byte
 	and	al,0BFh			; clear bit 6 - reset
@@ -1417,10 +1417,10 @@ fdc_read_id:
 	mov	al,4Ah			; FDC Read ID command
 	mov	ah,[bp+phys_drive]	; read id - byte 1 (head = 0 / drive)
 	mov	cl,2			; 2 byte commands
-	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ6 flag
+	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ flag
 	call	fdc_send_cmd
 	jc	.error_cmd
-	call	fdc_wait_irq		; wait for IRQ6
+	call	fdc_wait_irq		; wait for IRQ
 	jc	.error_cmd		; timeout waiting for interrupt
 	mov	cl,7
 	call	fdc_get_result		; read result bytes
