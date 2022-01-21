@@ -68,7 +68,8 @@ msg_cfg_help	db	0Dh, 0Ah, 'Multi-Floppy BIOS configuration help:', 0Dh, 0Ah
 		db	'p - Print current configuration settings', 0Dh, 0Ah
 		db	'w - Write setting to the EEPROM and exit', 0Dh, 0Ah
 		db	'q - Exit without saving settings', 0Dh, 0Ah
-		db	'h - Print this help message', 00h
+		db	'h - Print this help message', 0Dh, 0Ah
+		db	'ESC - Return to main menu', 00h
 msg_cfg_prompt	db	0Dh, 0Ah, "Enter command ('h' for help): ", 00h
 msg_cfg_drv_many db	0Dh, 0Ah, 'Error: Cannot add a new logical drive, all drive numbers are allocated.', 00h
 msg_cfg_drv_del	db	0Dh, 0Ah, 'Enter logical drive number to delete (0-', 00h

@@ -29,6 +29,7 @@ Version 2.5
 -----------
 - Automatically detect if the system supports AT delays
 - Enable IRQ and DMA channel sharing between primary and secondary FDCs
+- Return to configuration utility main menu when ESC key is pressed
 
 Version 2.4
 -----------

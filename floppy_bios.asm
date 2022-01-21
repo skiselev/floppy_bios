@@ -772,6 +772,8 @@ config_util:
 .add_drive_fdc_key_loop:
 	mov	ah,00h
 	int	16h			; wait for a keystroke
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	cmp	al,'1'
 	jb	.add_drive_fdc_key_loop
 	cmp	al,'2'
@@ -814,6 +816,8 @@ config_util:
 .add_drive_phys_key_loop:
 	mov	ah,00h
 	int	16h
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	cmp	al,'0'
 	jb	.add_drive_phys_key_loop
 	cmp	al,'3'
@@ -861,6 +865,8 @@ config_util:
 .add_drive_log_key_loop:
 	mov	ah,00h
 	int	16h
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	cmp	al,'0'
 	jb	.add_drive_log_key_loop
 	cmp	al,ch
@@ -881,6 +887,8 @@ config_util:
 .add_drive_type_loop:
 	mov	ah,00h
 	int	16h
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	cmp	al,'1'
 	jb	.add_drive_type_loop
 	cmp	al,'6'
@@ -925,6 +933,8 @@ config_util:
 .del_drive_key_loop:
 	mov	ah,00h
 	int	16h			; wait for a keystroke
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	cmp	al,'0'
 	jb	.ena_fdc2_dma_key_loop
 	cmp	al,dh
@@ -955,6 +965,8 @@ config_util:
 .ena_fdc2_irq_key_loop:
 	mov	ah,00h
 	int	16h			; wait for a keystroke
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	cmp	al,'2'
 	jb	.ena_fdc2_irq_key_loop
 	cmp	al,'7'
@@ -972,6 +984,8 @@ config_util:
 .ena_fdc2_dma_key_loop:
 	mov	ah,00h
 	int	16h			; wait for a keystroke
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	cmp	al,'1'
 	jb	.ena_fdc2_dma_key_loop
 	cmp	al,'3'
@@ -1011,6 +1025,8 @@ config_util:
 .dev_fdc2_key_loop:
 	mov	ah,00h
 	int	16h			; wait for a keystroke
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	or	al,20h			; convert letters to the lower case
 	cmp	al,'y'
 	je	.dev_fdc2_key_yes
@@ -1067,6 +1083,8 @@ config_util:
 .config_ipl_key:
 	mov	ah,00h
 	int	16h			; wait for a keystroke
+	cmp	al,1Bh			; ESC?
+	je	.cfg_loop		; exit to main menu
 	or	al,20h			; convert letters to the lower case
 	cmp	al,'b'
 	je	.config_ipl_builtin
