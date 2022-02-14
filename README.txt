@@ -25,6 +25,11 @@ the configuration data structure.
 Release Notes
 =============
 
+Version 2.6
+-----------
+- Fix performance issue when reading consecutive sectors
+- Simply access to the secondary FDC variables, use DS=0000h
+
 Version 2.5
 -----------
 - Automatically detect if the system supports AT delays
@@ -101,16 +106,16 @@ Configuration Data Structure
 ----------------------------
 
 The configuration data is stored in the extension BIOS ROM starting from
-offset 1F80h.
+offset 1FC0h.
 
 Here is the location and the purpose of the configuration data:
 
-Offset 1F80h, size 1 bytes:
+Offset 1FC0h, size 1 bytes:
 Checksum correction byte. Value of this byte is negative of the sum of the
 rest of bytes in 1F81h - 1FFFh range, so that the sum of the 1F80h - 1FFFh
 range equals zero.
 
-Offset 1F81h, size 32 bytes:
+Offset 1FC1h, size 32 bytes:
 Floppy drive configuration, 8 entries, 4 bytes each:
 	byte 0 - drive type:
 		0 - drive not present
@@ -129,7 +134,7 @@ Notes:
   twist is the physical drive 0, and the drive before the twist is the physical
   drive 1.
 
-Offset 1FA1h, size 8 bytes:
+Offset 1FE1h, size 8 bytes:
 FDC configuration, 2 entries (primary FDC and secondary FDC), 4 bytes each:
 	word 0 - FDC base address.
 		Normally 3F0h for the primary FDC and 370h for the secondary FDC
@@ -138,32 +143,11 @@ FDC configuration, 2 entries (primary FDC and secondary FDC), 4 bytes each:
 	byte 3 - FDC DMA channel number.
 		Normally 2 for the primary FDC
 
-Offset 1FA9h, size 4 bytes:
-Pointer to floppy drive media state for drives 4-7 variables array.
-	word 0 - offset; default: 02C0h
-	word 2 - segment; default; 0000h
-
-Offset 1FADh, size 4 bytes:
-Pointer to current cylinder for drives 2-7 variables array:
-	word 0 - offset; default: 02C4h
-	word 2 - segment; default: 0000h
-
-Offset 1FB1h, size 4 bytes:
-Pointer to mode, motor state, and selected drive for the secondary FDC variable:
-	word 0 - offset; default: 02CAh
-	word 2 - segment; default: 0000h
-
-
-Offset 1FB5h, size 4 bytes:
-Pointer to the run-time Multi-Floppy BIOS flags
-	word 0 - offset; default: 02CBh
-	word 2 - segment; default: 0000h
-
-Offset 1FB9, size 2 bytes:
+Offset 1FE9, size 2 bytes:
 Configuration prompt (Press F2...) delay in 55 ms units
 	word - default: 55 (approximately 3 seconds)
 
-Offset 1FBB, size 1 byte:
+Offset 1FEB, size 1 byte:
 Configuration flags
 	bit 0 - 1: Enable IRQ and DMA sharing; 0: Disable IRQ and DMA sharing
 		Set automatically when configuring the secondary FDC
@@ -171,11 +155,11 @@ Configuration flags
 		default: 0 - Don't display
 	bit 2 - Display configuration prompt on boot (INT 19h)
 		default: 1 - Display
-	bit 3 - Use built-in IPL functionality
+	bit 3 - Use built-in Floppy BIOS IPL functionality
 		default: 0 - Don't use built-in IPL, use System BIOS IPL
 	bits 4 - 7 - Reserved, set to 0
 		
-Offset 1FBC, size 3 bytes:
+Offset 1FEC, size 3 bytes:
 Code to run relocated timer (IRQ0) handler. The second byte is also used to
 determine what interrupt number the default INT 08h handler should be
 relocated to. This is only used in configurations with two FDCs.
@@ -183,7 +167,7 @@ relocated to. This is only used in configurations with two FDCs.
 	byte 1 - default: 0AFh (interrupt 0AFh)
 	byte 2 - default: 0CFh (IRET opcode)
 
-Offset 1FBF, size 3 bytes;
+Offset 1FEF, size 3 bytes;
 Code to run relocated INT 19h (boot) handler. The second byte is also used to
 determine what interrupt number the default INT 19h handler should be
 relocated to.
