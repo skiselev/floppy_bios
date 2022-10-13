@@ -99,6 +99,15 @@ rom_size	db	10h		; 8 KiB in 512 bytes blocks
 init_entry	jmp	init
 
 ;=========================================================================
+; Messages include goes first, so that the Multi-Floppy BIOS string
+; is located at the offset 0006h (right after the ROM header and jmp init)
+;-------------------------------------------------------------------------
+%include	"messages.inc"		; messages
+
+;=========================================================================
+; checksum correction byte - changed by fix_checksum so that
+; the checksum of the code portion of the BIOS extension ROM equals 0
+;=========================================================================
 ; Initialization code
 ;-------------------------------------------------------------------------
 init:
@@ -1908,7 +1917,6 @@ int_timer:
 ;-------------------------------------------------------------------------
 %include	"floppy1.inc"		; floppy services
 %include	"floppy2.inc"
-%include	"messages.inc"		; messages
 %include	"flash.inc"		; Flash ROM and EEPROM write code
 
 ;=========================================================================

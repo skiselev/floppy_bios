@@ -28,6 +28,13 @@ config_space	equ	8000h		; offset of the configuration
 temp_segment	equ	07C0h		; segment for flash writing code
 max_page_size	equ	16384		; maximal flash page size (Am29F010)
 
+ticks_per_sec	equ	1193182		; 8254 PIT ticks per second
+identify_delay	equ 	(ticks_per_sec/100)	; flash ID delay is 1/100 = 10 ms
+write_delay	equ	(ticks_per_sec/20000)	; write/erase delay is 1/20000 = 50 us
+erase_timeout	equ	(ticks_per_sec/10/write_delay)		; page erase timeout is 1/10 = 100 ms
+page_write_timeout	equ	(ticks_per_sec/10/write_delay)	; page write timeout is 1/10 = 100 ms
+byte_write_timeout	equ	(ticks_per_sec/100/write_delay)	; byte write timeout is 1/100 = 10 ms
+
 ;=========================================================================
 ; flash_write - Write configuration to Flash ROM or EEPROM
 ;		Must be copied to RAM and run from it
@@ -89,11 +96,15 @@ flash_write:
 
 .eeprom_write_data:
 	mov	byte[bx],dh		; try to program the byte
-	xor	ax,ax
+	mov	ax,byte_write_timeout	; FIXME: use CX for the loop?
 
 .eeprom_write_wait:
 	cmp	byte[bx],dh		; was it programmed successfully?
 	je	.eeprom_write_next
+	push	ax
+	mov	ax,write_delay
+	call	pit_delay
+	pop	ax
 	dec	ax
 	jnz	.eeprom_write_wait
 	or	dl,dl			; EEPROM with SDP was attempted?
@@ -123,12 +134,10 @@ flash_write:
 	mov	byte [si],0AAh
 	mov	byte [di],55h
 	mov	byte [si],90h		; enter ID mode command
-	push	cx
-	mov	cx,1000h
-.flash_id_delay1:
-;FIXME: Use I/O delay for faster machines
-	loop	.flash_id_delay1	; some ICs need 10ms delay
-	pop	cx	
+	push	ax
+	mov	ax,identify_delay
+	call	pit_delay
+	pop	ax
 	mov	bp,word [0]		; get device ID
 	cmp	bp,ax			; is it really an ID?
 	jne	.select_flash		; yes, try to select the flash type
@@ -139,12 +148,10 @@ flash_write:
 	mov	byte [si],0AAh
 	mov	byte [di],55h
 	mov	byte [si],90h		; enter ID mode command
-	push	cx
-	mov	cx,1000h
-.flash_id_delay2:
-;FIXME: Use I/O delay for faster machines
-	loop	.flash_id_delay2	; some ICs need 10ms delay
-	pop	cx
+	push	ax
+	mov	ax,identify_delay
+	call	pit_delay
+	pop	ax
 	mov	bp,word [0]		; get device ID
 	cmp	bp,ax			; is it really an ID?
 	jne	.select_flash		; yes, try to select the flash type
@@ -159,7 +166,7 @@ flash_write:
 .unsupported_flash:
 	mov	si,msg_cfg_unk_id
 	call	print
-	mov	ax,cx
+	mov	ax,bp
 	call	print_hex
 
 .error:
@@ -180,7 +187,7 @@ flash_write:
 	jne	.try_sst29ee010
 	mov	cx,128			; sector size is 128 bytes
 	and	bx,0FF80h		; round BX down to 128 bytes boundary
-	jmp	short .write_auto_sector
+	jmp	.write_auto_sector
 
 .try_sst29ee010:
 	cmp	bp,07BFh		; BF = SST, 07 = SST29EE010/GLS29EE010
@@ -219,34 +226,38 @@ flash_write:
 	mov	byte [di],055h
 	mov	byte [bx],30h		; erase sector command
 	mov	dx,cx			; save sector size to DX
-	xor	cx,cx
+	mov	cx,erase_timeout
 
 .write_erase_byte1:
-	mov	al,20h			; additional delay
-					; Am29F010 is slow to erase...
-.write_erase_byte2:
-	dec	al
-	jnz	.write_erase_byte2
 	cmp	byte [bx],0FFh		; is it erased yet?
-	loopne	.write_erase_byte1
-	or	cx,cx			; CX ?= 0
-	jz	.error			; erase timed out
+	je	.write_erase_byte2
+	push	ax
+	mov	ax,write_delay
+	call	pit_delay
+	pop	ax
+	loop	.write_erase_byte1
+	jmp	short .error		; erase timed out
 
-.write_erase_byte3:
+.write_erase_byte2:
 	mov	byte [si],0AAh
 	mov	byte [di],55h
 	mov	byte [si],0A0h		; enter write mode
 
     es	mov	al,byte [bx]		; read byte to write
 	mov	byte [bx],al		; write it to flash
-	xor	cx,cx
+	mov	cx,byte_write_timeout
+
+.write_erase_byte3:
+	cmp	al,byte [bx]		; wait for write operation to complete
+	je	.write_erase_byte4
+	push	ax
+	mov	ax,write_delay
+	call	pit_delay
+	pop	ax
+	loop	.write_erase_byte3
+	jmp	.error			; write timed out
 
 .write_erase_byte4:
-	cmp	al,byte [bx]		; wait for write operation to complete
-	loopne	.write_erase_byte4
-	or	cx,cx			; CX ?= 0
-	jz	.error			; write timed out
-
 	inc	bx
 	dec	dx
 	jnz	.write_erase_byte3
@@ -265,14 +276,18 @@ flash_write:
 	inc	bx
 	loop	.write_auto_sector1	; write next byte
 
-	xor	cx,cx
 	dec	bx
+	mov	cx,page_write_timeout
 
 .write_auto_sector2:
 	cmp	al,byte [bx]		; wait for write operation to complete
-	loopne	.write_auto_sector2
-	or	cx,cx			; CX ?= 0
-	jz	.error			; write timed out
+	je	.exit
+	push	ax
+	mov	ax,write_delay
+	call	pit_delay
+	pop	ax
+	loop	.write_auto_sector2
+	jmp	.error			; write timed out
 
 .exit:
 	clc
@@ -280,4 +295,41 @@ flash_write:
 	pop	es
 	pop	ds
 	pop	bp
+	ret
+
+
+;=========================================================================
+; pit_delay - Wait the indicated number of timer ticks
+; Input:
+;	AX - number ticks to wait
+; Output:
+;	none
+; Note:
+;	One timer tick is 1/1193182 of a second
+;-------------------------------------------------------------------------
+pit_delay:
+	push	bx
+	push	ax
+	in	al,0x61
+	or	al,0x01			; enable 8254 PIT channel 2
+	out	0x61,al			; write to 8255 PPI port B
+	mov	bl,al			; save written value for XT/AT test
+	mov	al,0xB0			; set PIT channel 2 to mode 0
+	out	0x43,al			; write control word to PIT
+	pop	ax			; restore AX value - number of ticks
+	push	ax
+	out	0x42,al			; set PIT ch. 2 inital count - low byte
+	mov	al,ah
+	out	0x42,al			; set PIT ch. 2 inital count - high byte
+.delay_loop:
+	in	al,0x61			; try reading port B first
+	cmp	al,bl
+	jne	.delay_test		; port B value had changed,
+					; must be Xi 8088 (or an AT)
+	in	al,0x62			; read PPI port C
+.delay_test:
+	test	al,0x20			; check if bit 5 set - PIT ch. 2 output
+	jz	.delay_loop		; not set, keep waiting
+	pop	ax
+	pop	bx
 	ret
