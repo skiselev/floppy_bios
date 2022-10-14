@@ -131,6 +131,15 @@ flash_write:
 ; try to identify Flash ROM using 5555h and 2AAAh addresses for commands
 	mov	si,5555h
 	mov	di,2AAAh
+
+	mov	byte[si],0AAh
+	mov	byte[di],55h
+	mov	byte[si],0F0h		; exit ID mode, reset the chip
+	push	ax
+	mov	ax,identify_delay
+	call	pit_delay
+	pop	ax
+
 	mov	byte [si],0AAh
 	mov	byte [di],55h
 	mov	byte [si],90h		; enter ID mode command
@@ -138,6 +147,7 @@ flash_write:
 	mov	ax,identify_delay
 	call	pit_delay
 	pop	ax
+
 	mov	bp,word [0]		; get device ID
 	cmp	bp,ax			; is it really an ID?
 	jne	.select_flash		; yes, try to select the flash type
