@@ -81,6 +81,11 @@ fdc2_motor_state equ	(0B1h * 4 + 2)	; mode, motor state, and selected drive for 
 runtime_flags	equ	(0B2h * 4 + 3)	; Multi-Floppy BIOS flags determined at the runtime
 
 ;-------------------------------------------------------------------------
+; BIOS ROM area
+bioscseg	equ	0F000h	; BIOS code segment
+model_byte	equ	0FFFEh	; System model byte (0FCh is an AT compatible)
+
+;-------------------------------------------------------------------------
 ; ROM configuration flags
 irq_sharing	equ	01h	; Primary and secondary FDCs share IRQ and DMA
 config_on_init	equ	02h	; Display configuration prompt on initialization
@@ -177,19 +182,13 @@ init:
 check_delays:
 	sti
 
-; this code waits approximately 18.2 ms
-	mov	dx,word [ticks_lo]
-	in	al,port_b_reg
-	and	al,refresh_flag		; get current refresh_flag value
-	mov	ah,al			; store in AH
-.wait:
-	in	al,port_b_reg
-	and	al,refresh_flag		; get updated refresh_flag value
-	cmp	ah,al
-	jne	.at_delays		; refresh_flag changed - AT delays
-
-	cmp	dx,word [ticks_lo]
-	je	.wait			; wait a bit more
+	push	ds
+	mov	ax,bioscseg		; BIOS code segment
+	mov	ds,ax
+	mov	al,byte [model_byte]	; System model byte
+	pop	ds
+	cmp	al,0FCh			; is it an IBM AT or compatible?
+	je	.at_delays
 	jmp	.exit			; refresh_flag didn't change - XT delays
 
 .at_delays:
