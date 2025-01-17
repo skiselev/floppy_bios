@@ -32,8 +32,6 @@
 fdc2_addr	equ	370h	; base address for the secondary FDC
 pic1_reg0	equ	20h
 pic1_reg1	equ	21h
-port_b_reg	equ	61h
-refresh_flag	equ	10h	; refresh flag, toggles every 15us
 
 ;------------------------------------------------------------------------
 ; Interrupt vectors
@@ -78,7 +76,6 @@ fdc_cylinder	equ	494h	; byte[2] - current cylinder (drives 0 - 1)
 fdc2_media_state equ	(0B0h * 4)	; floppy drive media state for drives 4-7: 4 bytes
 fdc2_cylinder	equ	(0B1h * 4)	; current cylinder for drives 2-7: 6 bytes
 fdc2_motor_state equ	(0B1h * 4 + 2)	; mode, motor state, and selected drive for the secondary FDC: 1 byte
-runtime_flags	equ	(0B2h * 4 + 3)	; Multi-Floppy BIOS flags determined at the runtime
 
 ;-------------------------------------------------------------------------
 ; ROM configuration flags
@@ -86,9 +83,6 @@ irq_sharing	equ	01h	; Primary and secondary FDCs share IRQ and DMA
 config_on_init	equ	02h	; Display configuration prompt on initialization
 config_on_boot	equ	04h	; Display configuration prompt on boot
 builtin_ipl	equ	08h	; Use built-in IPL functionality
-
-; Runtime ROM configuration flags
-use_at_delays	equ	01h	; Use AT delays (port 61h, bit 4)
 
 ;=========================================================================
 ; Extension BIOS ROM header
@@ -128,11 +122,6 @@ init:
 	call	set_int19_isr
 
 ;-------------------------------------------------------------------------
-; Determine if system supports AT delays
-
-	call	check_delays
-
-;-------------------------------------------------------------------------
 ; print floppy controllers and drives configuration
 
 	call	print_config		; print the current configuration
@@ -156,39 +145,6 @@ init:
 	pop	bx
 	pop	ax
 	retf
-
-;=========================================================================
-; check_delays - check if system supports AT delays
-; Input:
-;	DS = 0000h (interrupt vectors segment)
-; Output:
-;	sets flags at runtime_flags_addr
-;	trashes AX and DX registers
-;-------------------------------------------------------------------------
-check_delays:
-	sti
-
-; this code waits approximately 18.2 ms
-	mov	dx,word [ticks_lo]
-	in	al,port_b_reg
-	and	al,refresh_flag		; get current refresh_flag value
-	mov	ah,al			; store in AH
-.wait:
-	in	al,port_b_reg
-	and	al,refresh_flag		; get updated refresh_flag value
-	cmp	ah,al
-	jne	.at_delays		; refresh_flag changed - AT delays
-
-	cmp	dx,word [ticks_lo]
-	je	.wait			; wait a bit more
-	jmp	.exit			; refresh_flag didn't change - XT delays
-
-.at_delays:
-	or	byte [runtime_flags],use_at_delays
-
-.exit:
-	ret
-
 
 ;=========================================================================
 ; set_interrupts - set interrupt vectors as needed
@@ -239,7 +195,7 @@ set_interrupts:
 
 	mov	word [fdc2_media_state],ax	; clear 4 bytes
 	mov	word [fdc2_media_state+2],ax
-	mov	word [fdc2_motor_state],ax	; clear 2 bytes; also clears runtime_flags
+	mov	word [fdc2_motor_state],ax	; clear 2 bytes
 
 ; check if there is a secondary FDC
 
@@ -1700,57 +1656,6 @@ print_config:
 	ret
 
 ;=========================================================================
-; delay_15us - delay for multiplies of 15 microseconds
-; Input:
-;	CX = time to delay (in 15 microsecond units)
-; Notes:
-;	1.  Actual delay will be between (CX - 1) * 15us and CX * 15us
-;	2.  This relies on the "refresh" bit of port 61h and therefore on
-;	    timer channel 1. Will not function properly if timer gets
-;	    reprogrammed by an application or if it was not initialized yet
-;-------------------------------------------------------------------------
-delay_15us:
-	test	byte [runtime_flags],use_at_delays	; use AT delays?
-	jz	delay_15us_xt
-
-; delay subroutine for AT
-
-delay_15us_at:
-	push	ax
-	push	cx
-.zero:
-	in	al,port_b_reg
-	test	al,refresh_flag
-	jz	.zero
-	dec	cx
-	jz	.exit
-.one:
-	in	al,port_b_reg
-	test	al,refresh_flag
-	jnz	.one
-	dec	cx
-	jnz	.zero
-.exit:
-	pop	cx
-	pop	ax
-	ret
-
-; delay subroutine for XT
-
-delay_15us_xt:
-	push	ax
-	push	cx
-.1:
-	mov	al,10
-.2:
-	dec	al
-	jnz	.2
-	loop	.1
-	pop	cx
-	pop	ax
-	ret
-
-;=========================================================================
 ; print - print ASCIIZ string to the console
 ; Input:
 ;	CS:SI - pointer to string to print
@@ -1910,6 +1815,7 @@ int_timer:
 %include	"floppy2.inc"
 %include	"messages.inc"		; messages
 %include	"flash.inc"		; Flash ROM and EEPROM write code
+%include	"delay.inc"		; PIT delay code
 
 ;=========================================================================
 ; checksum correction byte - changed by fix_checksum so that

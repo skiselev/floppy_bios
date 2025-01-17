@@ -19,6 +19,6 @@
 ;
 ;=========================================================================
 
-%define	VERSION		"2.6"		; version
+%define	VERSION		"2.7"		; version
 %define	START		0		; BIOS extension ROM starts at 0
 %define NUM_DRIVES	8		; maximal number of drives
