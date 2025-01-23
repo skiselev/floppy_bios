@@ -1,7 +1,7 @@
 ;=========================================================================
 ; delay.inc - Delay functions
 ;-------------------------------------------------------------------------
-; Copyright (C) 2010 - 2024 Sergey Kiselev.
+; Copyright (C) 2010 - 2025 Sergey Kiselev.
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -45,17 +45,17 @@ delay_15us:
 	push	cx
 	push	dx
 	mov	ax,2*15*pit_freq/1000/1000+1	; ~ 36 ticks/us	
-	mul	cx		; dx:ax = countdown of pit ticks to wait
-	xchg	ax,bx		; dx:bx = countdown ticks
-	call	io_wait_latch	; ax = start read
-	mov	cx,ax		; cx = last read
+	mul	cx		; DX:AX = number of PIT ticks to wait
+	mov	bx,ax		; DX:BX = countdown of PIT ticks to wait
+	call	io_wait_latch	; AX = initial PIT channel 0 counter value
+	mov	cx,ax		; CX = last read PIT channel 0 counter value
 .tick_loop:
-	call	io_wait_latch	; ax = current counter reading
-	sub	cx,ax		; cx = # of ticks elapsed since last reading
-	sub	bx,cx		; subtract change in ticks from countdown
-	mov	cx,ax		; cx = save the last read
-	sbb	dx,0		; borrow out of high word (if necessary)
-	jae	.tick_loop	; loop while countdown >= 0
+	call	io_wait_latch	; AX = current PIT channel 0 counter reading
+	sub	cx,ax		; CX = # of ticks elapsed since last reading
+	sub	bx,cx		; Subtract change in ticks from countdown
+	mov	cx,ax		; CX = save the last read
+	sbb	dx,0		; Borrow out of high word (if necessary)
+	jae	.tick_loop	; Loop while countdown >= 0
 	pop	dx
 	pop	cx
 	pop	bx
@@ -94,21 +94,21 @@ io_wait_latch:
 fdc_wait_irq:
 	push	cx
 	push	dx
-	mov	bx,6484		; dx:ax = countdown of pit ticks to wait
-	mov	dx,1		; 65536 + 6484 = 72020 ticks = 2 seconds
-	call	io_wait_latch	; ax = start read
-	mov	cx,ax		; cx = last read
+	mov	bx,0		; DX:BX = countdown of pit ticks to wait
+	mov	dx,36		; approximately 2 seconds
+	call	io_wait_latch	; AX = initial PIT channel 0 counter value
+	mov	cx,ax		; CX = last read PIT channel 0 counter value
 .tick_loop:
 	test	byte [fdc_calib_state],fdc_irq_flag
 	jnz	.exit
-	call	io_wait_latch	; ax = current counter reading
-	sub	cx,ax		; cx = # of ticks elapsed since last reading
-	sub	bx,cx		; subtract change in ticks from countdown
-	mov	cx,ax		; cx = save the last read
-	sbb	dx,0		; borrow out of high word (if necessary)
-	jae	.tick_loop	; loop while countdown >= 0
+	call	io_wait_latch	; AX = current PIT channel 0 counter reading
+	sub	cx,ax		; CX = # of ticks elapsed since last reading
+	sub	bx,cx		; Subtract change in ticks from countdown
+	mov	cx,ax		; CX = save the last read
+	sbb	dx,0		; Borrow out of high word (if necessary)
+	jae	.tick_loop	; Loop while countdown >= 0
+				; note CF = 1 here (underflow at SBB)
 	mov	ah,fdc_e_timeout
-	stc			; CF =1 - error
 	pop	dx
 	pop	cx
 	ret
