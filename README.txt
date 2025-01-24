@@ -27,8 +27,8 @@ Release Notes
 
 Version 2.7
 -----------
-- Use delay subroutines that work on both AT and PC/XT systems by reading
-  the PIT counters, eliminating the need for separate AT and XT routines
+- Implement delay subroutines that work on both AT and PC/XT systems using
+  the PIT counter, eliminating the need for separate AT and XT routines
 
 Version 2.6
 -----------

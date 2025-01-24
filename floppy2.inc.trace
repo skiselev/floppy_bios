@@ -7,7 +7,7 @@
 ;	- see floppy1.inc for other INT 13h functions
 ;-------------------------------------------------------------------------
 ;
-; Copyright (C) 2011 - 2021 Sergey Kiselev.
+; Copyright (C) 2010 - 2025 Sergey Kiselev.
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by

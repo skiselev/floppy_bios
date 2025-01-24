@@ -1,6 +1,6 @@
 # Makefile - GNU Makefile
 # 
-# Copyright (C) 2011 Sergey Kiselev.
+# Copyright (C) 2010 - 2025 Sergey Kiselev.
 # Provided for hobbyist use on the Sergey's XT board.
 #
 # This program is free software: you can redistribute it and/or modify
