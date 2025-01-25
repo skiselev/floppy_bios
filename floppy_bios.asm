@@ -895,9 +895,9 @@ config_util:
 	cmp	al,1Bh			; ESC?
 	je	.cfg_loop		; exit to main menu
 	cmp	al,'0'
-	jb	.ena_fdc2_dma_key_loop
+	jb	.del_drive_key_loop
 	cmp	al,dh
-	ja	.ena_fdc2_dma_key_loop
+	ja	.del_drive_key_loop
 	mov	ah,0Eh			; INT 10 function 0Eh - teletype output
 	mov	bx,0007h		; page number + color (for graphic mode)
 	int	10h			; print the character
