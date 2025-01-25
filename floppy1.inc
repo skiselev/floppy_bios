@@ -636,8 +636,8 @@ fdc_recalibrate:
 	mov	ch,0
 	call	set_cylinder		; set current cylinder to 0
 	call	set_drive_calibrated	; set drive calibrated in data area
-	mov	cx,43h
-	call	delay_15us		; 1 ms delay
+	mov	cx,20			; 20 * 50 us = 1 ms delay
+	call	delay_50us
 	xor	ah,ah			; AH = 0, CF = 0 - no error
 
 recal_end:
@@ -726,12 +726,12 @@ fdc_seek:
 	or	al,al			; head settle time is zero?!
 	jz	.get_settle_time
 
-	mov	cl,67			; 15 us * 67 ~= 1 ms
-	mul	cl			; AX = delay in 15 us intervals
+	mov	cl,20			; 50 us * 20 = 1 ms
+	mul	cl			; AX = delay in 50 us intervals
 	mov	cx,ax
 
 .wait:
-	call	delay_15us
+	call	delay_50us
 
 .wait_end:
 	xor	ah,ah			; AH = 0, CF = 0 - no error
@@ -818,8 +818,8 @@ fdc_motor_on:
 	mov	al,5			; wait at least 625 ms for read / verify
 
 .wait_loop:
-	mov	cx,8287			; 8287 * 15.09us ~= 125ms
-	call	delay_15us		; wait 125 ms
+	mov	cx,2500			; 2500 * 50 us = 125 ms
+	call	delay_50us		; wait 125 ms
 	dec	al
 	jnz	.wait_loop		; repeat until AL = 0
 
@@ -1301,8 +1301,8 @@ fdc_reset:
 	push	ax			; set_fdc_dor trashes AX, save it
 	call	set_fdc_dor
 	pop	ax
-	mov	cx,3
-	call	delay_15us		; 30-45 us delay
+	mov	cx,1
+	call	delay_50us		; 50 us delay
 	or	al,40h			; set bit 6 - no reset
 	call	set_fdc_dor
 	sti

@@ -65,7 +65,6 @@ fdc_motor_tout	equ	440h	; byte - floppy drive motor off timeout (ticks)
 fdc_last_error	equ	441h	; byte - status of last diskette operation
 fdc_ctrl_status	equ	442h	; byte[7] - FDC status bytes
 warm_boot	equ	472h	; word - Warm boot if equals 1234h
-ticks_lo	equ	46Ch	; word - timer ticks - low word
 fdc_last_rate	equ	48Bh	; byte - last data rate / step rate
 fdc_info	equ	48Fh	; byte - floppy dist drive information
 fdc_media_state	equ	490h	; byte[4] - drive media state (drives 0 - 3)
@@ -468,13 +467,10 @@ config_prompt:
 	ret
 
 .config_no_key:
-
-; this code waits approximately 18.2 ms
-	mov	dx,word [ticks_lo]
-
-.wait:
-	cmp	dx,word [ticks_lo]
-	je	.wait
+	push	cx
+	mov	cx,20			; 20 * 50 us = 1 ms
+	call	delay_50us		; wait 1 ms
+	pop	cx
 	loop	.config_loop
 
 .config_esc:
@@ -1863,8 +1859,8 @@ fdc_config:
 	db	07h			; Secondary FDC IRQ
 	db	03h			; Secondary FDC DMA channel
 
-; configuration prompt delay in 55 ms units
-config_delay	dw	55		; approximately 3 seconds
+; configuration prompt delay in milliseconds
+config_delay	dw	3000		; 3 seconds
 
 ; configuration flags
 config_flags	db	(config_on_boot)

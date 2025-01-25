@@ -23,28 +23,32 @@ pit_ctl_reg	equ	43h
 pit_freq	equ	1193182	; PIT input frequency - 14318180 MHz / 12
 
 ;=========================================================================
-; delay_15us - delay for multiplies of 15 microseconds using PIT
+; delay_50us - delay for multiplies of 50 microseconds using PIT
 ; Input:
-;	CX = time to delay (in 15 microsecond units)
+;	CX = delay in 50 microsecond units
 ;
+; Algorithm:
 ; - Calculate the total number of PIT ticks necessary
-;	1,193,182 / 1000 ms / 1000 us / * 15 us * 2 = ~ 36 ticks/us
-; - Latch the PIT and draw down the countdown total on each read.
-; - Exit when countdown underflows.
-;
-; Note: Mode 3 (Square Wave) decrements the readable counter by 2, so the
-; effective frequency of the counter is actually 2,386,360 Hz.
+;   - Mode 3 (Square Wave) decrements the readable counter by 2, so the
+;     effective frequency of the counter is actually 2386360 Hz
+;   - Each 50 us is: 
+;	2 * 1193182 Hz / 0.000005 s  = ~ 119 ticks
+;   - Multiply 119 by CX
+; - Latch the PIT and read the initial counter
+; - Repeat latching the PIT and reading the counter, subtracting the delta
+;   from the total number of ticks
+; - Exit when countdown underflows
 ;
 ; Contributed by @640-KB (under GPL-3.0 license)
 ; Based on contribution by @Raffzahn (under CC BY-SA 4.0):
 ; https://retrocomputing.stackexchange.com/a/24874/21323
 ;-------------------------------------------------------------------------
-delay_15us:
+delay_50us:
 	push	ax
 	push	bx
 	push	cx
 	push	dx
-	mov	ax,2*15*pit_freq/1000/1000+1	; ~ 36 ticks/us	
+	mov	ax,2*50*pit_freq/10000000	; ~ 119 ticks/50 us
 	mul	cx		; DX:AX = number of PIT ticks to wait
 	mov	bx,ax		; DX:BX = countdown of PIT ticks to wait
 	call	io_wait_latch	; AX = initial PIT channel 0 counter value

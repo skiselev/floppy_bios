@@ -149,8 +149,8 @@ FDC configuration, 2 entries (primary FDC and secondary FDC), 4 bytes each:
 		Normally 2 for the primary FDC
 
 Offset 1FE9, size 2 bytes:
-Configuration prompt (Press F2...) delay in 55 ms units
-	word - default: 55 (approximately 3 seconds)
+Configuration prompt (Press F2...) delay in 1 ms units
+	word - default: 3000 (3 seconds)
 
 Offset 1FEB, size 1 byte:
 Configuration flags
