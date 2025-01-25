@@ -122,10 +122,8 @@ flash_write:
 	mov	byte [di],55h
 	mov	byte [si],90h		; enter ID mode command
 	push	cx
-	mov	cx,1000h
-.flash_id_delay1:
-;FIXME: Use I/O delay for faster machines
-	loop	.flash_id_delay1	; some ICs need 10ms delay
+	mov	cx,200			; 200 * 50 ms
+	call	delay_50us		; some ICs need 10ms delay
 	pop	cx	
 	mov	bp,word [0]		; get device ID
 	cmp	bp,ax			; is it really an ID?
@@ -138,10 +136,8 @@ flash_write:
 	mov	byte [di],55h
 	mov	byte [si],90h		; enter ID mode command
 	push	cx
-	mov	cx,1000h
-.flash_id_delay2:
-;FIXME: Use I/O delay for faster machines
-	loop	.flash_id_delay2	; some ICs need 10ms delay
+	mov	cx,200			; 200 * 50 ms
+	call	delay_50us		; some ICs need 10ms delay
 	pop	cx
 	mov	bp,word [0]		; get device ID
 	cmp	bp,ax			; is it really an ID?
@@ -178,34 +174,35 @@ flash_write:
 	jne	.try_sst29ee010
 	mov	cx,128			; sector size is 128 bytes
 	and	bx,0FF80h		; round BX down to 128 bytes boundary
-	jmp	short .write_auto_sector
+	jmp	.write_auto_sector
 
 .try_sst29ee010:
 	cmp	bp,07BFh		; BF = SST, 07 = SST29EE010/GLS29EE010
 	jne	.try_w29ee011
 	mov	cx,128			; sector size is 128 bytes
 	and	bx,0FF80h		; round BX down to 128 bytes boundary
-	jmp	short .write_auto_sector
+	jmp	.write_auto_sector
 
 .try_w29ee011:
 	cmp	bp,0C1DAh		; DA = Winbond, C1 = W29EE011
 	jne	.try_sst39sf010
 	mov	cx,128			; sector size is 128 bytes
 	and	bx,0FF80h		; round BX down to 128 bytes boundary
-	jmp	short .write_auto_sector
+	jmp	.write_auto_sector
 
 .try_sst39sf010:
 	cmp	bp,0B5BFh		; BF = SST, B5 = SST39SF010
 	jne	.try_am29f010
 	mov	cx,4096			; sector size is 4 KiB
 	and	bx,0F000h		; round BX down to 4 KiB boundary
-	jmp	short .write_erase_byte
+	jmp	.write_erase_byte
 
 .try_am29f010:
 	cmp	bp,2001h		; 01 = AMD, 20 = Am29F010
 	jne	.unsupported_flash
 	mov	cx,16384		; sector size is 16 KiB
 	and	bx,0C000h		; round BX down to 16 KiB boundary
+					; fall through to .write_erase_byte
 
 ; write Flash that requires block erase prior to write, and writen byte by byte
 	
@@ -217,20 +214,19 @@ flash_write:
 	mov	byte [di],055h
 	mov	byte [bx],30h		; erase sector command
 	mov	dx,cx			; save sector size to DX
-	xor	cx,cx
-
+	mov	cx,1500			; erase timeout 1.5 seconds
+					; Am29F010 has tWHWH2 = 1.3 seconds
 .write_erase_byte1:
-	mov	al,20h			; additional delay
-					; Am29F010 is slow to erase...
-.write_erase_byte2:
-	dec	al
-	jnz	.write_erase_byte2
+	push	cx
+	mov	cx,20			; 20 * 50 us = 1 ms delay
+	call	delay_50us
+	pop	cx
 	cmp	byte [bx],0FFh		; is it erased yet?
 	loopne	.write_erase_byte1
 	or	cx,cx			; CX ?= 0
 	jz	.error			; erase timed out
 
-.write_erase_byte3:
+.write_erase_byte2:
 	mov	byte [si],0AAh
 	mov	byte [di],55h
 	mov	byte [si],0A0h		; enter write mode
@@ -239,15 +235,15 @@ flash_write:
 	mov	byte [bx],al		; write it to flash
 	xor	cx,cx
 
-.write_erase_byte4:
+.write_erase_byte3:
 	cmp	al,byte [bx]		; wait for write operation to complete
-	loopne	.write_erase_byte4
+	loopne	.write_erase_byte3
 	or	cx,cx			; CX ?= 0
 	jz	.error			; write timed out
 
 	inc	bx
 	dec	dx
-	jnz	.write_erase_byte3
+	jnz	.write_erase_byte2
 	jmp	short .exit
 
 ; write Flash that auto erases itself and programmed sector by sector
@@ -263,13 +259,18 @@ flash_write:
 	inc	bx
 	loop	.write_auto_sector1	; write next byte
 
-	xor	cx,cx
 	dec	bx
+	mov	cx,20			; program timeout 20 ms
+					; AT29C010 has tWC < 10 ms
 
 .write_auto_sector2:
 	cmp	al,byte [bx]		; wait for write operation to complete
-	loopne	.write_auto_sector2
-	or	cx,cx			; CX ?= 0
+	je	.exit
+	push	cx
+	mov	cx,20			; 20 * 50 us = 1 ms delay
+	call	delay_50us
+	pop	cx
+	loop	.write_auto_sector2
 	jz	.error			; write timed out
 
 .exit:

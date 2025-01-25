@@ -651,7 +651,7 @@ config_util:
 	neg	al
 	mov	[config_sum_byte],al
 
-; call eeprom_write
+; call flash_write
 
 	mov	bx,config		; DS:BX/ES:BX = source/destination addr
 	mov	cx,config_size		; number of bytes to write
