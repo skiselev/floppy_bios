@@ -139,8 +139,7 @@ type_2880	equ	06h
 ;-------------------------------------------------------------------------
 int_13_fn00:
 	call	fdc_init
-.exit:
-	mov	[fdc_last_error],ah	; save the error code
+	mov	byte [fdc_last_error],ah  ; save the error code
 	jmp	int_13_exit
 
 ;=========================================================================
@@ -158,8 +157,8 @@ fdc_init:
 	call	reset_calib_state	; require recalibration
 	call	fdc_reset		; reset FDC
 	jc	fdc_init_error
-	mov	dx,fdc_status_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
+	mov	dx,fdc_status_reg	; get status register address
+	add	dx,word [bp+fdc_base]	; get register address for current FDC
 	in	al,dx
 	test	al,80h
 	jz	.try_again		; try again if FDC not ready
@@ -167,8 +166,8 @@ fdc_init:
 	jz	.fdc_ready		; FDC ready to recieve data
 .try_again:
 	call	fdc_reset
-	mov	dx,fdc_status_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
+	mov	dx,fdc_status_reg	; get status register address
+	add	dx,word [bp+fdc_base]	; get register address for current FDC
 	in	al,dx
 	test	al,80h
 	jz	fdc_init_error
@@ -180,11 +179,11 @@ fdc_init:
 	jc	fdc_init_error
 	call	fdc_read		; read ST0
 	jc	fdc_init_error
-	mov	byte [fdc_ctrl_status],al	; save ST0
+	mov	byte [fdc_ctrl_status],al  ; save ST0
 	mov	ah,al			; save AL to AH
 	call	fdc_read		; read current cylinder
 	jc	fdc_init_error
-	mov	byte [fdc_ctrl_status+1],al	; save
+	mov	byte [fdc_ctrl_status+1],al  ; save
 	and	ah,0C0h
 	cmp	ah,0C0h			; abnormal termination?
 	jne	fdc_init_error		; not an abnormal termination
@@ -253,7 +252,7 @@ int_13_fn01:
 ;	CF clear if successful
 ;		AX = 0000h
 ;		BH = 00h
-;		BL = CMOS drive type
+;		BL = drive type
 ;		CH = maximal cylinder number - 1
 ;		CL = maximal sector number
 ;		DH = maximal head number
@@ -265,7 +264,7 @@ int_13_fn01:
 ;	- If non-existent drive number is specified, function returns zeros in
 ;	AX,BX,CX,DH,ES,DI and number of floppy drives in DL (0 if no floppies)
 ;	- If media type is not established function sets media parameters 
-;	based on CMOS drive type
+;	based on drive type
 ;-------------------------------------------------------------------------
 int_13_fn08:
 	cmp	dl,80h			; valid floppy drive number?
@@ -285,10 +284,10 @@ int_13_fn08:
 	pop	dx
 
 	call	get_drive_type		; returns drive type in AL
-	jc	.non_existent_drive	; return no drive if CMOS error
+	jc	.non_existent_drive	; return no drive if there is an error
 
 	mov	byte [bp+int_13_dh],1	; maximal head number is 1 for floppy
-	mov	byte [bp+int_13_bl],al	; pass CMOS data type to caller
+	mov	byte [bp+int_13_bl],al	; pass drive type to caller
 	mov	cx,cs
 	mov	es,cx			; diskette parameter table segment
 
@@ -348,7 +347,7 @@ int_13_fn08:
 .non_existent_drive:
 	xor	cx,cx
 	xor	di,di
-	mov	byte [bp+int_13_bl],cl	; CMOS drive type is zero
+	mov	byte [bp+int_13_bl],cl	; drive type is zero
 	mov	byte [bp+int_13_dh],cl	; maximal head number is zero
 	mov	es,cx			; disk parameter table segment = 0000h
 	jmp	.set_parameters
@@ -406,8 +405,8 @@ int_13_fn16:
 
 	call	fdc_motor_on		; turn motor on
 	xor	ah,ah			; assume disk not changed
-	mov	dx,fdc_dir_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
+	mov	dx,fdc_dir_reg		; get digital input register address
+	add	dx,word [bp+fdc_base]	; get register address for current FDC
 	in	al,dx			; read disk change line
 	shl	al,1			; bit 7 to CF
 	jnc	.exit
@@ -415,13 +414,13 @@ int_13_fn16:
 	stc
 
 .exit:
-	mov	[fdc_last_error],ah	; save the error code
+	mov	byte [fdc_last_error],ah  ; save the error code
 	pushf
 	push	ds
 	lds	si,[1Eh*4]		; DS:SI -> INT 1Eh
 	mov	cl,byte [si+2]
 	pop	ds
-	mov	byte [fdc_motor_tout],cl ; ticks before turning off the motor
+	mov	byte [fdc_motor_tout],cl  ; ticks before turning off the motor
 	popf
 	jmp	int_13_exit
 
@@ -455,7 +454,7 @@ int_13_fn16:
 ;		AH = 80h - timeout / device not ready
 ;-------------------------------------------------------------------------
 int_13_fn17:
-	mov	cl,[bp+int_13_al]	; get original AL value to CL
+	mov	cl,byte [bp+int_13_al]	; get original AL value to CL
 	cmp	cl,0			; validate parameters
 	je	.invalid_parameters
 	cmp	cl,4
@@ -611,7 +610,7 @@ fdc_recalibrate:
 	push	cx
 	push	dx
 	mov	al,07h			; FDC Recalibrate command
-	mov	ah,[bp+phys_drive]	; drive number - 2nd byte of command
+	mov	ah,byte [bp+phys_drive]	; drive number - 2nd byte of command
 	mov	cl,2			; 2 bytes command
 	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ flag
 	call	fdc_send_cmd
@@ -627,7 +626,7 @@ fdc_recalibrate:
 	jc	recal_end		; failure
 	mov	bx,fdc_ctrl_status
 	mov	ah,fdc_e_seek
-	mov	dl,[bx]			; ST0
+	mov	dl,byte [bx]		; ST0
 	and	dl,60h
 	cmp	dl,60h			; abnormal termination + seek end
 	stc				; indicate error
@@ -693,7 +692,7 @@ fdc_seek:
 	mov	ah,dh			; head
 	shl	ah,1			; move head to bit 2
 	shl	ah,1
-	or	ah,[bp+phys_drive]	; seek - byte 1 (head / drive)
+	or	ah,byte [bp+phys_drive]	; seek - byte 1 (head / drive)
 	mov	cl,3			; 3 bytes command
 	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ flag
 	call	fdc_send_cmd
@@ -711,7 +710,7 @@ fdc_seek:
 	pop	bx
 	jc	.set_result		; error
 	mov	ah,fdc_e_seek
-	mov	al,byte [fdc_ctrl_status] ; ST0
+	mov	al,byte [fdc_ctrl_status]	; ST0
 	and	al,60h
 	cmp	al,60h			; abnormal termination + seek end
 	stc
@@ -772,9 +771,8 @@ fdc_motor_on:
 	push	dx
 	cli				; entering critical section
 	mov	byte [fdc_motor_tout],0FFh  ; set timeout to maximum
-
-	mov	dl,[bp+phys_drive]	; DL = physical drive number
-	mov	cl,dl
+	mov	dl,byte [bp+phys_drive]	; DL = physical drive number
+	mov	cl,dl			; CL = physical drive number
 	inc	cl			; CL = physical drive number + 1
 	call	get_motor_state		; AL = motor state for this FDC
 	mov	dh,al			; keep a copy in motor state in DH
@@ -848,18 +846,18 @@ fdc_end_io:
 	push	ax
 	push	ds
 	lds	bx,[1Eh*4]		; DS:BX -> INT 1Eh
-	mov	ah,[bx+2]		; motor timeout (ticks)
-	mov	al,[bx+4]		; sectors per track
+	mov	ah,byte [bx+2]		; motor timeout (ticks)
+	mov	al,byte [bx+4]		; sectors per track
 	inc	al
 	pop	ds
 	mov	bx,fdc_ctrl_status
-	cmp	ch,[bx+3]		; same result cylinder?
+	cmp	ch,byte [bx+3]		; same result cylinder?
 	jne	.exit
-	cmp	dh,[bx+4]		; same result head?
+	cmp	dh,byte [bx+4]		; same result head?
 	jne	.exit
-	mov	al,[bx+5]		; result sector number
+	mov	al,byte [bx+5]		; result sector number
 .exit:
-	mov	byte [fdc_motor_tout],ah ; motor timeout
+	mov	byte [fdc_motor_tout],ah  ; motor timeout
 	mov	bl,al			; next sector to be transferred
 	pop	ax
 	ret
@@ -874,6 +872,7 @@ fdc_end_io:
 ;	CF set if disk changed or on error
 ;		AH = 06h - disk changed
 ;		AH = error code
+;	AL - trashed
 ; Note:
 ;	Motor needs to be turned on before calling this function
 ;------------------------------------------------------------------------
@@ -892,8 +891,8 @@ fdc_disk_change:
 	jz	.exit			; jump if 360K drive (no change line)
 	cmp	al,3
 	je	.exit			; jump if 360K drive (no change line)
-	mov	dx,fdc_dir_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
+	mov	dx,fdc_dir_reg		; get digital input register address
+	add	dx,word [bp+fdc_base]	; get register address for current FDC
 	in	al,dx			; read disk change line
 	shl	al,1
 	jnc	.exit			; no disk change
@@ -910,8 +909,8 @@ fdc_disk_change:
 	call	fdc_seek		; seek to cylinder 0
 	jc	.exit
 	mov	ah,fdc_e_changed
-	mov	dx,fdc_dir_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
+	mov	dx,fdc_dir_reg		; get digital input register address
+	add	dx,word [bp+fdc_base]	; get register address for current FDC
 	in	al,dx			; read disk change line
 	shl	al,1
 	jnc	.changed_or_error	; jump if disk change line was reset
@@ -921,7 +920,7 @@ fdc_disk_change:
 	stc
 
 .exit:
-	mov	dx,word [bp+int_13_dx]	; restore dx
+	mov	dx,word [bp+int_13_dx]	; restore DX 
 	pop	cx
 	pop	bx
 	ret
@@ -934,12 +933,12 @@ fdc_disk_change:
 ;		44h - read   (single mode, addr increment, write)
 ;		48h - write  (single mode, addr increment, read)
 ;	CX = byte count (minus 1)
-;	ES:BX -> buffer address for DMA operation (BX is from [bp+int_13_bx])
+;	ES:BX -> buffer address for DMA operation (BX is from [BP+int_13_bx])
 ; Output:
 ;	CF clear on success
 ;	CF set if error
 ;		AH = 08h - DMA overrun
-;	AX trashed
+;	AX,BX trashed
 ; Note:
 ;	Translates ES:BX to DMA page and base address and configures DMAC
 ;-------------------------------------------------------------------------
@@ -966,7 +965,7 @@ fdc_configure_dma:
 	mov	bh,0			; BX = FDC number
 	shl	bx,1			; table index, mulitply by 4
 	shl	bx,1
-    cs	mov	bl,byte [(fdc_config+3)+bx] ; BL = FDC's DMA channel number
+    cs	mov	bl,byte [(fdc_config+3)+bx]	; BL = FDC's DMA channel number
 
 	xchg	bx,dx			; BX = base address, DX = DMA channel
 
@@ -1023,7 +1022,7 @@ fdc_configure_dma:
 	jmp	$+2
 	jmp	$+2
 	mov	al,dl			; AL = DMA channel number
-	out	dmac_mask_reg,al	; enable DMA channel 2
+	out	dmac_mask_reg,al	; enable DMA channel
 	sti
 	clc				; CF = 0 - no error
 
@@ -1105,9 +1104,9 @@ fdc_write:
 	push	cx
 	push	dx
 	push	ax
-	mov	dx,[bp+fdc_base]	; get base address for current FDC
-	add	dx,fdc_status_reg	; get status register address
-        xor     cx,cx			; busy wait counter
+	mov	dx,fdc_status_reg	; get status register address
+	add	dx,word [bp+fdc_base]	; get base address for current FDC
+	xor	cx,cx			; busy wait counter
 
 .wait_ready:
 	in	al,dx			; read fdc_status_reg
@@ -1155,11 +1154,11 @@ fdc_get_result:
 	push	cx
 	push	dx
 	mov	bx,fdc_ctrl_status
-	mov	dx,[bp+fdc_base]	; get base address for current FDC
-	add	dx,fdc_status_reg	; get status register address
+	mov	dx,fdc_status_reg	; get status register address
+	add	dx,word [bp+fdc_base]	; get base address for current FDC
 
 .next_byte:
-        xor     cx,cx			; busy wait counter
+	xor	cx,cx			; busy wait counter
 
 .wait_ready:
 	in	al,dx			; read fdc_status_reg
@@ -1213,9 +1212,9 @@ fdc_get_result:
 fdc_read:
 	push	cx
 	push	dx
-	mov	dx,[bp+fdc_base]	; get base address for current FDC
-	add	dx,fdc_status_reg	; get status register address
-        xor     cx,cx			; busy wait counter
+	mov	dx,fdc_status_reg	; get status register address
+	add	dx,word [bp+fdc_base]	; get base address for current FDC
+	xor	cx,cx			; busy wait counter
 
 .wait_ready:
 	in	al,dx			; read fdc_status_reg
@@ -1328,7 +1327,7 @@ fdc_detect_media:
 	push	cx
 
 	mov	ah,fdc_e_failure	; in case the get_drive_type fails
-	mov	dl,[bp+int_13_dl]	; restore DL in case it was trashed
+	mov	dl,byte [bp+int_13_dl]	; restore DL in case it was trashed
 	call	get_drive_type		; get drive type to AL
 	jc	.exit			; drive doesn't exist or invalid type
 
@@ -1430,7 +1429,7 @@ fdc_read_id:
 .read_id_loop:
 	push	cx
 	mov	al,4Ah			; FDC Read ID command
-	mov	ah,[bp+phys_drive]	; read id - byte 1 (head = 0 / drive)
+	mov	ah,byte [bp+phys_drive]	; read id - byte 1 (head = 0 / drive)
 	mov	cl,2			; 2 byte commands
 	and	byte [fdc_calib_state],~fdc_irq_flag ; clear IRQ flag
 	call	fdc_send_cmd
@@ -1479,8 +1478,8 @@ fdc_set_rate:
 .fdc2:
 	rol	al,1
 	rol	al,1
-	mov	dx,fdc_ccr_reg
-	add	dx,[bp+fdc_base]	; get register address for current FDC
+	mov	dx,fdc_ccr_reg		; get control configuration register address
+	add	dx,word [bp+fdc_base]	; get register address for current FDC
 	out	dx,al
 	mov	dx,word [bp+int_13_dx]	; restore DX
 	pop	ax

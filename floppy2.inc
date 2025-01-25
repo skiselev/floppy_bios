@@ -366,7 +366,7 @@ int_13_fn04:
 	mov	si,ax			; head / cylinder (bytes 2-3)
 	shl	ah,1
 	shl	ah,1
-	or	ah,[bp+phys_drive]	; FDC command byte 1 (head & drive)
+	or	ah,byte [bp+phys_drive]	; FDC command byte 1 (head & drive)
 	mov	al,0E6h			; FDC Read command
 	cmp	byte [bp+int_13_ah],3	; write function?
 	jne	.send_command		; jump if not write 
@@ -469,7 +469,7 @@ int_13_fn05:
 	mov	ah,dh
 	shl	ah,1
 	shl	ah,1
-	or	ah,[bp+phys_drive]	; FDC command byte 1 (head & drive)
+	or	ah,byte [bp+phys_drive]	; FDC command byte 1 (head & drive)
 	mov	al,4Dh			; FDC Format command
 	mov	cl,6			; 6 byte command
 	and	byte [fdc_calib_state],~fdc_irq_flag ; wait for IRQ
