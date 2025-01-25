@@ -28,7 +28,12 @@ Release Notes
 Version 2.7
 -----------
 - Implement delay subroutines that work on both AT and PC/XT systems using
-  the PIT counter, eliminating the need for separate AT and XT routines
+  the PIT counter, eliminating the need for separate AT and XT delay routines
+- Fix a bug on the original IBM PC and IBM PC/XT where the Multi-Floppy
+  BIOS extension was getting stuck at the initialization
+- Use delay routine for Flash ROM programming algorithms
+- Fix a bug in the configuration utility where drive was not deleted when
+  an invalid drive number was entered the first time
 
 Version 2.6
 -----------
