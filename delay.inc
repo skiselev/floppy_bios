@@ -48,7 +48,7 @@ delay_50us:
 	push	bx
 	push	cx
 	push	dx
-	mov	ax,2*50*pit_freq/10000000	; ~ 119 ticks/50 us
+	mov	ax,2*50*pit_freq/1000000	; ~ 119 ticks/50 us
 	mul	cx		; DX:AX = number of PIT ticks to wait
 	mov	bx,ax		; DX:BX = countdown of PIT ticks to wait
 	call	io_wait_latch	; AX = initial PIT channel 0 counter value
