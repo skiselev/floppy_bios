@@ -60,6 +60,43 @@ the configuration data structure.
 ### Version 1.0b1
 - Mostly a straight forward copy of the floppy functions from Xi 8088 BIOS
 
+## Multi-Floppy BIOS Upgrade Procedure
+
+### Option 1: In system upgrade
+
+1. _Optional step; required for IBM PC and IBM XT systems that cannot boot with Multi-Floppy BIOS versions 2.5 and 2.6._ Disable Flash ROM on the floppy controller board, so that system can be booted:
+  * Monster FDC: Remove the first "Enable" jumper in the from the jumper block JP5.
+  * Quad Flop: Move switch 7 "ROMEN" on the DIP switch block SW1 to "Off" position (toward the ISA slot).
+2. Create a bootable floppy.
+  * Use 5.25" / 360 KB or 3.5" / 720 KB diskettes for IBM PC and IBM XT. Other media is not be supported by IBM PC and IBM XT BIOSes.
+  * Bootable floppy can be created using DOS `FORMAT A:/S` or `SYS A:` commands.
+3. Download [xiflash.exe](https://github.com/skiselev/xiflash) utility and copy it to the diskette.
+4. Download new [floppy_bios.bin](https://github.com/skiselev/floppy_bios/blob/master/floppy_bios.bin) and copy it to the diskette.
+5. Boot your PC using the floppy.
+6. Enable the ROM by carefully moving the ROM enable switch. Don't use metal or other conductive materials... use something like a wooden toothpick...
+7. Run `xiflash -i <floppy_bios.bin> -a <hex_address> -p`; where:
+  * `<floppy_bios.bin>` is the name of the image you've downloaded in step 4
+  * `<hex_address>` is the paragraph address of the Floppy BIOS ROM
+    * Check your floppy disk controller board switches or jumpers for the ROM address settings.
+  * For example, if your image name is floppy27.bin, and the address is 0xC8000, you can use the following command: `xiflash -i floppy27.bin -a C800 -p`
+8. Reboot the PC
+
+Notes:
+* It is possible to use another ISA system to do the upgrade
+* It is also possible to use HDD, CF card or other media instead of the floppy drive to boot and run xiflash 
+
+### Option 2: Use EPROM Programmer
+
+This method assumes that you have an EPROM programmer that supports whatever Flash ROM Quad Flop uses (I think it is SST39SF010, but I am unsure about it)
+
+1. Download new [floppy_bios.bin](https://github.com/skiselev/floppy_bios/blob/master/floppy_bios.bin).
+2. Carefully extract Flash ROM IC from the floppy disk controller board.
+3. Set up the EPROM programmer: Connect it to your host system; Install the software, etc.
+4. Insert the Flash ROM into the programmer.
+5. Load floppy_bios.bin image. If needed, choose to pad the rest of the chip with 0xFF.
+6. Program the Flash ROM
+7. Install the Flash ROM back into the floppy disk controller, and the Quad Flop back to the PC.
+8. Boot your PC.
 
 ## Implementation Notes
 
